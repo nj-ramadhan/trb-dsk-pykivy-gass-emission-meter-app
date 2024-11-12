@@ -18,6 +18,7 @@ import serial.tools.list_ports as ports
 import hashlib
 import serial
 
+
 colors = {
     "Red": {
         "A200": "#FF2A2A",
@@ -73,17 +74,17 @@ DB_HOST = config['mysql']['DB_HOST']
 DB_USER = config['mysql']['DB_USER']
 DB_PASSWORD = config['mysql']['DB_PASSWORD']
 DB_NAME = config['mysql']['DB_NAME']
-TB_WTM = config['mysql']['TB_WTM']
+TB_emission = config['mysql']['TB_emission']
 TB_USER = config['mysql']['TB_USER']
 
 COM_PORT_PRINTER = config['device']['COM_PORT_PRINTER']
-COM_PORT_WTM = config['device']['COM_PORT_WTM']
+COM_PORT_emission = config['device']['COM_PORT_emission']
 TIME_OUT = 500
 
-dt_wtm_value = 0
-dt_wtm_flag = 0
-dt_wtm_user = 1
-dt_wtm_post = str(time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()))
+dt_emission_value = 0
+dt_emission_flag = 0
+dt_emission_user = 1
+dt_emission_post = str(time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()))
 dt_user = "SILAHKAN LOGIN"
 dt_no_antrian = ""
 dt_no_reg = ""
@@ -105,7 +106,7 @@ class ScreenLogin(MDScreen):
 
     def exec_login(self):
         global mydb, db_users
-        global dt_wtm_user, dt_user
+        global dt_emission_user, dt_user
 
         try:
             input_username = self.ids.tx_username.text
@@ -126,7 +127,7 @@ class ScreenLogin(MDScreen):
             else:
                 toast_msg = f'Berhasil Masuk, Selamat Datang {myresult[1]}'
                 toast(toast_msg)
-                dt_wtm_user = myresult[0]
+                dt_emission_user = myresult[0]
                 dt_user = myresult[1]
                 self.ids.tx_username.text = ""
                 self.ids.tx_password.text = "" 
@@ -166,7 +167,7 @@ class ScreenMain(MDScreen):
             toast(toast_msg)           
 
     def regular_update_connection(self, dt):
-        global printer, wtm_device
+        global printer, emission_device
         global flag_conn_stat
 
         try:
@@ -181,11 +182,18 @@ class ScreenMain(MDScreen):
                     parity = 'N',
                     stopbits = 1,
                     timeout = 1.00,
+                    dsrdtr = True) 
+            printer = printerSerial(devfile = COM_PORT_emission,
+                    baudrate = 115200,
+                    bytesize = 8,
+                    parity = 'N',
+                    stopbits = 1,
+                    timeout = 1.00,
                     dsrdtr = True)    
 
-            wtm_device = serial.Serial()
-            wtm_device.baudrate = 115200
-            wtm_device.port = COM_PORT_WTM
+            emission_device = serial.Serial()
+            emission_device.baudrate = 115200
+            emission_device.port = COM_PORT_emission
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
             bytesize=serial.EIGHTBITS        
@@ -197,7 +205,7 @@ class ScreenMain(MDScreen):
             #         stopbits = 1,
             #         timeout = 1.00)
             
-            wtm_device.open()
+            emission_device.open()
             
         except Exception as e:
             toast_msg = f'error initiate Printer'
@@ -234,7 +242,7 @@ class ScreenMain(MDScreen):
 
     def on_row_press(self, table, row):
         global dt_no_antrian, dt_no_reg, dt_no_uji, dt_nama, dt_jenis_kendaraan
-        global dt_wtm_flag, dt_wtm_value, dt_wtm_user, dt_wtm_post
+        global dt_emission_flag, dt_emission_value, dt_emission_user, dt_emission_post
 
         try:
             start_index, end_index  = row.table.recycle_data[row.index]["range"]
@@ -243,7 +251,7 @@ class ScreenMain(MDScreen):
             dt_no_uji               = row.table.recycle_data[start_index + 3]["text"]
             dt_nama                 = row.table.recycle_data[start_index + 4]["text"]
             dt_jenis_kendaraan      = row.table.recycle_data[start_index + 5]["text"]
-            dt_wtm_flag             = row.table.recycle_data[start_index + 6]["text"]
+            dt_emission_flag             = row.table.recycle_data[start_index + 6]["text"]
 
         except Exception as e:
             toast_msg = f'error update table: {e}'
@@ -251,9 +259,9 @@ class ScreenMain(MDScreen):
 
     def regular_update_display(self, dt):
         global flag_conn_stat
-        global dt_wtm_value, count_starting, count_get_data
+        global dt_emission_value, count_starting, count_get_data
         global dt_user, dt_no_antrian, dt_no_reg, dt_no_uji, dt_nama, dt_jenis_kendaraan
-        global dt_wtm_flag, dt_wtm_value, dt_wtm_user, dt_wtm_post
+        global dt_emission_flag, dt_emission_value, dt_emission_user, dt_emission_post
         try:
             screen_login = self.screen_manager.get_screen('screen_login')
             screen_counter = self.screen_manager.get_screen('screen_counter')
@@ -277,7 +285,7 @@ class ScreenMain(MDScreen):
             screen_counter.ids.lb_nama.text = str(dt_nama)
             screen_counter.ids.lb_jenis_kendaraan.text = str(dt_jenis_kendaraan)
 
-            if(dt_wtm_flag == "Belum Tes"):
+            if(dt_emission_flag == "Belum Tes"):
                 self.ids.bt_start.disabled = False
             else:
                 self.ids.bt_start.disabled = True
@@ -307,34 +315,34 @@ class ScreenMain(MDScreen):
                 screen_counter.ids.lb_comm.color = colors['Blue']['200']
                 screen_counter.ids.lb_comm.text = 'Printer Terhubung'
 
-            if(count_starting <= 0):
+            #if(count_starting <= 0):
                 screen_counter.ids.lb_test_subtitle.text = "HASIL PENGUKURAN"
-                screen_counter.ids.lb_window_tint.text = str(np.round(dt_wtm_value, 2))
+                screen_counter.ids.lb_emission.text = str(np.round(dt_emission_value, 2))
                 screen_counter.ids.lb_info.text = "Ambang Batas Tingkat Meneruskan Cahaya pada Kaca Kendaraan Anda adalah 70%"
                                                
-            elif(count_starting > 0):
+            #elif(count_starting > 0):
                 if(flag_play):
                     screen_counter.ids.lb_test_subtitle.text = "MEMULAI PENGUKURAN"
-                    screen_counter.ids.lb_window_tint.text = str(count_starting)
+                    screen_counter.ids.lb_emission.text = str(count_starting)
                     screen_counter.ids.lb_info.text = "Silahkan Nyalakan Klakson Kendaraan"
 
-            if(dt_wtm_value >= 70):
+            #if(dt_emission_value >= 70):
                 screen_counter.ids.lb_info.text = "Kaca Kendaraan Anda Memiliki Tingkat Meneruskan Cahaya Dalam Range Ambang Batas"
-            else:
+            #else:
                 screen_counter.ids.lb_info.text = "Kaca Kendaraan Anda Memiliki Tingkat Meneruskan Cahaya Diluar Ambang Batas"
 
             if(count_get_data <= 0):
                 if(not flag_play):
                     screen_counter.ids.lb_test_result.size_hint_y = 0.25
-                    if(dt_wtm_value >= 70):
+                    if(dt_emission_value >= 70):
                         screen_counter.ids.lb_test_result.md_bg_color = colors['Green']['200']
                         screen_counter.ids.lb_test_result.text = "LULUS"
-                        dt_wtm_flag = "Lulus"
+                        dt_emission_flag = "Lulus"
                         screen_counter.ids.lb_test_result.text_color = colors['Green']['700']
                     else:
                         screen_counter.ids.lb_test_result.md_bg_color = colors['Red']['A200']
                         screen_counter.ids.lb_test_result.text = "TIDAK LULUS"
-                        dt_wtm_flag = "Tidak Lulus"
+                        dt_emission_flag = "Tidak Lulus"
                         screen_counter.ids.lb_test_result.text_color = colors['Red']['A700']
 
             elif(count_get_data > 0):
@@ -353,9 +361,9 @@ class ScreenMain(MDScreen):
 
     def regular_get_data(self, dt):
         global flag_play
-        global dt_wtm_value
+        global dt_emission_value
         global count_starting, count_get_data
-        global wtm_device
+        global emission_device
         try:
             if(count_starting > 0):
                 count_starting -= 1              
@@ -372,13 +380,13 @@ class ScreenMain(MDScreen):
                 arr_val_ref = arr_ref[:,0]
                 arr_data_ref = arr_ref[:,1:]
 
-                data_byte = wtm_device.readline().decode("utf-8").strip()  # read the incoming data and remove newline character
+                data_byte = emission_device.readline().decode("utf-8").strip()  # read the incoming data and remove newline character
                 if data_byte != "":
                     arr_data_byte = np.array(data_byte.split())
 
                     for i in range(arr_val_ref.size):
                         if(np.array_equal(arr_data_byte, arr_data_ref[i])):
-                            dt_wtm_value = float(arr_val_ref[i])
+                            dt_emission_value = float(arr_val_ref[i])
                 
                 flag_play = False
                 Clock.unschedule(self.regular_get_data)
@@ -391,7 +399,7 @@ class ScreenMain(MDScreen):
         global mydb, db_antrian
         try:
             mycursor = mydb.cursor()
-            mycursor.execute("SELECT noantrian, nopol, nouji, user, idjeniskendaraan, wtm_flag FROM tb_cekident")
+            mycursor.execute("SELECT noantrian, nopol, nouji, user, idjeniskendaraan, emission_flag FROM tb_cekident")
             myresult = mycursor.fetchall()
             db_antrian = np.array(myresult).T
 
@@ -407,7 +415,7 @@ class ScreenMain(MDScreen):
         global flag_play, stream, audio
 
         if(not flag_play):
-            stream.start_stream()
+            #stream.start_stream()
             Clock.schedule_interval(self.regular_get_data, 1)
             self.open_screen_counter()
             flag_play = True
@@ -445,15 +453,15 @@ class ScreenCounter(MDScreen):
 
     def exec_reload(self):
         global flag_play
-        global count_starting, count_get_data, dt_wtm_value
+        global count_starting, count_get_data, dt_emission_value
 
         screen_main = self.screen_manager.get_screen('screen_main')
 
         count_starting = 3
         count_get_data = 10
-        dt_wtm_value = 0
+        dt_emission_value = 0
         self.ids.bt_reload.disabled = True
-        self.ids.lb_window_tint.text = "..."
+        self.ids.lb_emission.text = "..."
 
         if(not flag_play):
             stream.start_stream()
@@ -465,18 +473,18 @@ class ScreenCounter(MDScreen):
         global count_starting, count_get_data
         global mydb, db_antrian
         global dt_no_antrian, dt_no_reg, dt_no_uji, dt_nama, dt_jenis_kendaraan
-        global dt_wtm_flag, dt_wtm_value, dt_wtm_user, dt_wtm_post
+        global dt_emission_flag, dt_emission_value, dt_emission_user, dt_emission_post
         global printer
 
         self.ids.bt_save.disabled = True
 
         mycursor = mydb.cursor()
 
-        sql = "UPDATE tb_cekident SET wtm_flag = %s, wtm_value = %s, wtm_user = %s, wtm_post = %s WHERE noantrian = %s"
-        sql_wtm_flag = (1 if dt_wtm_flag == "Lulus" else 2)
-        dt_wtm_post = str(time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()))
+        sql = "UPDATE tb_cekident SET emission_flag = %s, emission_value = %s, emission_user = %s, emission_post = %s WHERE noantrian = %s"
+        sql_emission_flag = (1 if dt_emission_flag == "Lulus" else 2)
+        dt_emission_post = str(time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()))
         print_datetime = str(time.strftime("%d %B %Y %H:%M:%S", time.localtime()))
-        sql_val = (sql_wtm_flag, dt_wtm_value, dt_wtm_user, dt_wtm_post, dt_no_antrian)
+        sql_val = (sql_emission_flag, dt_emission_value, dt_emission_user, dt_emission_post, dt_no_antrian)
         mycursor.execute(sql, sql_val)
         mydb.commit()
 
@@ -497,11 +505,11 @@ class ScreenCounter(MDScreen):
         printer.set(double_height=True, double_width=True)
         printer.text(f"Status:\t")
         printer.set(bold=True)
-        printer.textln(f"{dt_wtm_flag}")
+        printer.textln(f"{dt_emission_flag}")
         printer.set(bold=False)
         printer.text(f"Nilai:\t")
         printer.set(bold=True)
-        printer.textln(f"{str(np.round(dt_wtm_value, 2))}")
+        printer.textln(f"{str(np.round(dt_emission_value, 2))}")
         printer.set(align="center", normal_textsize=True)     
         printer.textln("  ")
         printer.image("assets/logo-trb-print.png")
@@ -527,7 +535,7 @@ class ScreenCounter(MDScreen):
 class RootScreen(ScreenManager):
     pass             
 
-class SoundLevelMeterApp(MDApp):
+class GassemissiionApp(MDApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -556,4 +564,4 @@ class SoundLevelMeterApp(MDApp):
         return RootScreen()
 
 if __name__ == '__main__':
-    SoundLevelMeterApp().run()
+   GassemissiionApp().run()

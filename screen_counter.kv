@@ -34,7 +34,7 @@
 
 				MDLabel:
 					id: subtitle            
-					text: "WINDOW TINT METER / WTM"
+					text: "GASS EMMISION TEST"
 					halign: "left"
 					valign: "middle"
 					font_style: 'H5'
@@ -213,7 +213,7 @@
 						id: layout_sound
 
 						AsyncImage:
-							source: 'assets/wtm-1100-display-width.png'
+							source: 'assets/CO2.png'
 							pos_hint: {'x':.0, 'y':.0}
 							fit_mode: 'contain' #scale-down, fill, contain, cover
 
@@ -223,16 +223,16 @@
 							halign: "center"
 							valign: "middle"
 							font_style: 'H6'
-							pos_hint: {'x':.0, 'y':.20}
+							pos_hint: {'x':.0, 'y':.40}
 
 						MDLabel:
-							id: lb_window_tint
+							id: lb_emission
 							text: "..."
 							halign: "center"
 							valign: "middle"
 							font_style: 'Display'
 							font_size: '80dp'
-							pos_hint: {'x':.0, 'y':.0}
+							pos_hint: {'x':.0, 'y':-.20}
 
 						MDRectangleFlatIconButton:
 						# MDFloatingActionButton:
@@ -241,7 +241,7 @@
 							icon: "reload"
 							theme_text_color: "Custom"
 							text_color: "#EEEEEE"
-							pos_hint: {'x':.275, 'y':.06}
+							pos_hint: {'x':.275, 'y':.05}
 							disabled: True
 							on_press: root.exec_reload()
 
@@ -252,7 +252,7 @@
 							icon: "printer"
 							theme_text_color: "Custom"
 							text_color: "#EEEEEE"
-							pos_hint: {'x':.425, 'y':.06}
+							pos_hint: {'x':.425, 'y':.05}
 							disabled: True
 							on_press: root.exec_save()
 
@@ -265,7 +265,7 @@
 							theme_text_color: "Custom"
 							md_bg_color: "4471C4"
 							text_color: "#EEEEEE"
-							pos_hint: {'x':.575, 'y':.06}
+							pos_hint: {'x':.575, 'y':.05}
 							on_press: root.open_screen_main()
 
 
@@ -338,7 +338,7 @@
 
 				MDLabel:
 					id: lb_info
-					text: "Ambang Batas Kebisingan adalah 83 dB hingga 118 dB"
+					text: "Standar pengujian sesuai PERATURAN MENTERI LINGKUNGAN HIDUP DAN KEHUTANAN REPUBLIK INDONESIA N0 8 TAHUN 2023"
 					halign: "left"
 					valign: "middle"
 					font_style: 'H6'
