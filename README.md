@@ -1,5 +1,5 @@
-# Window Tint Meter
- Desktop application for Window Tint Meter
+# Gass Emission Test
+ Desktop application for Gass Emission Test
 
 ## for Windows OS
 Install git for windows
