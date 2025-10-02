@@ -126,7 +126,7 @@
 						MDBoxLayout:
 							orientation: "horizontal"
 							MDLabel:
-								text: "No. Pol"
+								text: "No. Polisi"
 								halign: "left"
 								valign: "middle"
 								font_style: 'H6'
@@ -154,13 +154,13 @@
 						MDBoxLayout:
 							orientation: "horizontal"
 							MDLabel:
-								text: "Nama"
+								text: "JBB"
 								halign: "left"
 								valign: "middle"
 								font_style: 'H6'
 
 							MDLabel:
-								id: lb_nama
+								id: lb_no_jbb
 								halign: "left"
 								valign: "middle"
 								font_style: 'H6'
@@ -168,13 +168,42 @@
 						MDBoxLayout:
 							orientation: "horizontal"
 							MDLabel:
-								text: "Jenis Kendaraan"
+								text: "Berat Kosong"
 								halign: "left"
 								valign: "middle"
 								font_style: 'H6'
 
 							MDLabel:
-								id: lb_jenis_kendaraan
+								id: lb_no_brtkosong
+								halign: "left"
+								valign: "middle"
+								font_style: 'H6'
+						
+						MDBoxLayout:
+							orientation: "horizontal"
+							MDLabel:
+								text: "Bahan Bakar"
+								halign: "left"
+								valign: "middle"
+								font_style: 'H6'
+
+							MDLabel:
+								id: lb_no_bahanbakar
+								halign: "left"
+								valign: "middle"
+								font_style: 'H6'
+
+						
+						MDBoxLayout:
+							orientation: "horizontal"
+							MDLabel:
+								text: "Tahun Pembuatan"
+								halign: "left"
+								valign: "middle"
+								font_style: 'H6'
+
+							MDLabel:
+								id: lb_no_tahunbuat
 								halign: "left"
 								valign: "middle"
 								font_style: 'H6'
@@ -211,7 +240,7 @@
 							text: "CO"
 							halign: "center"
 							valign: "middle"
-							font_style: 'Display'
+							font_style: 'H2'
 							font_size: '40dp'
 							theme_text_color: "Custom"
 							text_color: "#FFFFFF"
@@ -222,7 +251,7 @@
 							text: "..."
 							halign: "center"
 							valign: "middle"
-							font_style: 'Display'
+							font_style: 'H2'
 							font_size: '80dp'
 							theme_text_color: "Custom"
 							text_color: "#FFFFFF"
@@ -232,7 +261,7 @@
 							text: "%"
 							halign: "center"
 							valign: "middle"
-							font_style: 'Display'
+							font_style: 'H2'
 							font_size: '20dp'
 							theme_text_color: "Custom"
 							text_color: "#FFFFFF"
@@ -242,7 +271,7 @@
 							text: "HC"
 							halign: "center"
 							valign: "middle"
-							font_style: 'Display'
+							font_style: 'H2'
 							font_size: '40dp'
 							theme_text_color: "Custom"
 							text_color: "#FFFFFF"
@@ -253,7 +282,7 @@
 							text: "..."
 							halign: "center"
 							valign: "middle"
-							font_style: 'Display'
+							font_style: 'H2'
 							font_size: '80dp'
 							theme_text_color: "Custom"
 							text_color: "#FFFFFF"
@@ -263,21 +292,21 @@
 							text: "ppm"
 							halign: "center"
 							valign: "middle"
-							font_style: 'Display'
+							font_style: 'H2'
 							font_size: '20dp'
 							theme_text_color: "Custom"
 							text_color: "#FFFFFF"
 							pos_hint: {'x':.3, 'y':-.3}
 
 						MDRectangleFlatIconButton:
-							id: bt_reload
-							text: "ULANGI"
-							icon: "reload"
+							id: bt_mulai
+							text: "MULAI"
+							icon: "play-circle-outline"
 							theme_text_color: "Custom"
 							text_color: "#EEEEEE"
 							pos_hint: {'x':.275, 'y':.05}
 							disabled: True
-							on_press: root.exec_reload()
+							on_press: root.exec_start_test()
 
 						MDRectangleFlatIconButton:
 							id: bt_save
