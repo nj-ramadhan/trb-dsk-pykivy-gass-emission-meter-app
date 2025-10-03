@@ -649,25 +649,32 @@ class ScreenGassEmission(MDScreen):
         Clock.schedule_once(self.finish_test, duration)
 
     def read_serial_data(self, dt):
-        if not self.ser or not self.ser.is_open:
-            return
-        try:
-            self.ser.write(CMD_GET_DATA)
-            response_bytes = self.ser.readline()
-            if response_bytes:
-                response_str = response_bytes.decode('ascii', errors='ignore').strip()
-                if len(response_str) > 15 and response_str[0].isdigit():
+            if not self.ser or not self.ser.is_open:
+                return
+            
+            try:
+                self.ser.write(CMD_GET_DATA)
+                response_bytes = self.ser.readline()
+                
+                if response_bytes:
+                    response_str = response_bytes.decode('ascii', errors='ignore').strip()
+                    
                     parsed_data = self.parse_data_string_baru(response_str)
+                    
                     if parsed_data:
                         self.latest_hc = parsed_data.get('HC', self.latest_hc)
                         self.latest_co = parsed_data.get('CO', self.latest_co)
 
                         self.ids.lb_emission_hc.text = str(self.latest_hc)
                         self.ids.lb_emission_co.text = f"{self.latest_co:.2f}"
-        except serial.SerialException as e:
-            toast("Koneksi serial terputus!")
-            Logger.error(f"Serial Read Error: {e}")
-            self.finish_test(0)
+                    
+                    elif response_str:
+                        Logger.info(f"Respons lain diterima: {response_str}")
+
+            except serial.SerialException as e:
+                toast("Koneksi serial terputus!")
+                Logger.error(f"Serial Read Error: {e}")
+                self.finish_test(0) 
 
     # SIMULASI DUMMY    
     # def exec_start_test(self):
@@ -699,24 +706,31 @@ class ScreenGassEmission(MDScreen):
     #         Logger.error(f"Error di simulasi read_serial_data: {e}")
 
     def parse_data_string_baru(self, data_string: str):
-        try:
-            parts = data_string.split()
+            try:
+                parts = data_string.split()
+                if not parts:
+                    return None
 
-            if len(parts) >= 2:
-                co_value = float(parts[0]) / 100.0
-                hc_value = int(parts[1])
+                start_index = -1
+                for i, part in enumerate(parts):
+                    if part.isdigit():
+                        start_index = i
+                        break
+                
+                if start_index == -1 or len(parts) < start_index + 2:
+                    return None
+                    
+                hc_value = int(parts[start_index])
+                co_value = float(parts[start_index + 1]) / 100.0
 
                 return {
-                    'CO': co_value,
                     'HC': hc_value,
+                    'CO': co_value,
                 }
-            else:
-                Logger.warning(f"Format data serial tidak sesuai: '{data_string}'")
-                return None
 
-        except (ValueError, IndexError) as e:
-            Logger.error(f"Gagal parsing data: '{data_string}', error: {e}")
-            return None
+            except (ValueError, IndexError) as e:
+                Logger.error(f"Gagal parsing data: '{data_string}', error: {e}")
+                return None
 
     def finish_test(self, dt):
         if self.measurement_event:
