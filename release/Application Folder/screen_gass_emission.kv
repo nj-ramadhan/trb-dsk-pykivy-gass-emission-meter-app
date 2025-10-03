@@ -24,7 +24,7 @@
 				size_hint_x: 0.7
 
 				MDLabel:
-					id: title            
+					id: lb_title            
 					text: "VEHICLE INSPECTION INTEGRATION MANAGEMENT SYSTEM"
 					halign: "left"
 					valign: "middle"
@@ -32,9 +32,10 @@
 					theme_text_color: "Custom"
 					text_color: "#FFFFFF"
 
+
 				MDLabel:
-					id: subtitle            
-					text: "GAS EMISSION METER"
+					id: lb_subtitle            
+					text: "AXLE LOAD & BRAKE METER"
 					halign: "left"
 					valign: "middle"
 					font_style: 'H5'
@@ -74,7 +75,7 @@
 
 				MDLabel:
 					id: lb_comm
-					text: "Status : Disconnected"
+					text: "Com: Tidak Terhubung"
 					halign: "center"
 					valign: "middle"
 					font_style: 'H6'
@@ -303,9 +304,9 @@
 							text: "MULAI"
 							icon: "play-circle-outline"
 							theme_text_color: "Custom"
+							md_bg_color: "#2CA02C"
 							text_color: "#EEEEEE"
-							pos_hint: {'x':.275, 'y':.05}
-							disabled: True
+							pos_hint: {'x':.260, 'y':.05}
 							on_press: root.exec_start_test()
 
 						MDRectangleFlatIconButton:
@@ -313,9 +314,9 @@
 							text: "SIMPAN"
 							icon: "printer"
 							theme_text_color: "Custom"
+							md_bg_color: "#002fffff"
 							text_color: "#EEEEEE"
-							pos_hint: {'x':.425, 'y':.05}
-							disabled: True
+							pos_hint: {'x':.415, 'y':.05}
 							on_press: root.exec_save()
 
 						MDRectangleFlatIconButton:
@@ -323,9 +324,9 @@
 							text: "KEMBALI"
 							icon: "arrow-left"
 							theme_text_color: "Custom"
-							md_bg_color: "4471C4"
+							md_bg_color: "#f62525ff"
 							text_color: "#EEEEEE"
-							pos_hint: {'x':.575, 'y':.05}
+							pos_hint: {'x':.580, 'y':.05}
 							on_press: root.exec_navigate_main()
 
 		# footer layout
@@ -340,12 +341,14 @@
 				md_bg_color: "#4471C4"
 				size_hint_x: 0.4
 				
-				Image:
+				AsyncImage:
+					id: img_pemkab
 					source:'assets/images/logo-sorong.png'
 					size_hint_x: 0.1
 					allow_stretch: True  
 
-				Image:
+				AsyncImage:
+					id: img_dishub
 					source:'assets/images/logo-dishub.png'
 					size_hint_x: 0.1
 					allow_stretch: True  
@@ -354,25 +357,35 @@
 					orientation: "vertical"
 					size_hint_x: 0.8
 
-					MDLabel:			
+					MDLabel:
+						id: lb_pemkab
 						text: "PEMERINTAH KABUPATEN SORONG"
 						halign: "left"
 						valign: "middle"
-						font_style: 'Subtitle1'
-
-					MDLabel:			
-						text: "DINAS PERHUBUNGAN"
-						halign: "left"
-						valign: "middle"
-						font_style: 'Subtitle1'
-
-					MDLabel:			
-						text: "UNIT PELAKSANA UJI BERKALA KENDARAAN BERMOTOR"
-						halign: "left"
-						valign: "middle"
+						theme_text_color: "Custom"
+						text_color: "#EEEEEE"						
 						font_style: 'Subtitle1'
 
 					MDLabel:
+						id: lb_dishub
+						text: "DINAS PERHUBUNGAN"
+						halign: "left"
+						valign: "middle"
+						theme_text_color: "Custom"
+						text_color: "#EEEEEE"
+						font_style: 'Subtitle1'
+
+					MDLabel:
+						id: lb_unit			
+						text: "UNIT PELAKSANA UJI BERKALA KENDARAAN BERMOTOR"
+						halign: "left"
+						valign: "middle"
+						theme_text_color: "Custom"
+						text_color: "#EEEEEE"
+						font_style: 'Subtitle1'
+
+					MDLabel:
+						id: lb_unit_address
 						text: " Klamasen, Distrik Mariat, Kabupaten Sorong, Papua Barat Daya. 98416"
 						halign: "left"
 						valign: "middle"
