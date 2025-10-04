@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "VIIMS - Gass Emission Meter Application"
-#define MyAppVersion "2.2.251003"
+#define MyAppVersion "2.3.251004"
 #define MyAppPublisher "PT. Tiga Ratu Berkarya"
 #define MyAppExeName "TRB-VIIMS-GassEmissionMeterApp.exe"
 #define MyAppAssocName "VIIMS - Gass Emission Meter Application Files"
