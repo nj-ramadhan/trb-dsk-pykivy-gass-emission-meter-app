@@ -720,8 +720,8 @@ class ScreenGassEmission(MDScreen):
                 if start_index == -1 or len(parts) < start_index + 2:
                     return None
                     
-                hc_value = int(parts[start_index])
-                co_value = float(parts[start_index + 1]) / 100.0
+                co_value = float(parts[start_index]) / 100.0
+                hc_value = int(parts[start_index + 1])
 
                 return {
                     'HC': hc_value,
