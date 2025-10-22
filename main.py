@@ -42,7 +42,6 @@ import numpy as np
 import configparser, hashlib, mysql.connector
 from pymodbus.client import ModbusTcpClient
 from fpdf import FPDF
-from escpos.printer import Serial
 
 colors = {
     "Red"   : {"A200": "#FF2A2A","A500": "#FF8080","A700": "#FFD5D5",},
@@ -70,11 +69,11 @@ LB_UNIT = config['app']['LB_UNIT']
 LB_UNIT_ADDRESS = config['app']['LB_UNIT_ADDRESS']
 
 # SQL setting
-DB_HOST = "194.31.53.37"
-DB_USER = "Pndujikir2022!"
-DB_PASSWORD = "@Kirpnd2022!"
+DB_HOST = "156.67.217.60"
+DB_USER = "pkbsorong2024!"
+DB_PASSWORD = "@Sorongpkb2024"
+DB_NAME = "dishub"
 
-DB_NAME = "pkbpandeglang"
 TB_DATA = "tb_cekident"
 TB_USER = "users"
 TB_MERK = "merk"
@@ -89,22 +88,19 @@ FTP_PASS = "@D15HUBp2022!"
 ## System Setting
 COUNT_STARTING_GASS = int(config['setting']['COUNT_STARTING_GASS'])
 COUNT_STARTING_DIESEL = int(config['setting']['COUNT_STARTING_DIESEL'])
-COM_PORT = config['setting']['SERIAL_COM_GASS']
-BAUD_RATE = int(config['setting']['SERIAL_BAUD_GASS'])
-TIMEOUT = float(config['setting']['SERIAL_TIMEOUT_GASS'])
-
+COM_PORT_GASS = config['setting']['SERIAL_COM_GASS']
+BAUD_RATE_GASS = int(config['setting']['SERIAL_BAUD_GASS'])
+TIMEOUT_GASS = float(config['setting']['SERIAL_TIMEOUT_GASS'])
+COM_PORT_DIESEL = config['setting']['SERIAL_COM_DIESEL']
+BAUD_RATE_DIESEL = int(config['setting']['SERIAL_BAUD_DIESEL'])
+TIMEOUT_DIESEL = float(config['setting']['SERIAL_TIMEOUT_DIESEL'])
 CMD_STATUS = b'\x1bST\r\n'
 CMD_START_MEASURE = b'\x1b\x1bK5\r\n'
 CMD_STOP_MEASURE = b'\x1b\x1bK2\r\n'
 CMD_GET_DATA = b'\x1bCA\r\n'
-
-PRINTER_THERM_COM = str(config['setting']['PRINTER_THERM_COM'])
-PRINTER_THERM_BAUD = int(config['setting']['PRINTER_THERM_BAUD'])
-PRINTER_THERM_BYTESIZE = int(config['setting']['PRINTER_THERM_BYTESIZE'])
-PRINTER_THERM_PARITY = str(config['setting']['PRINTER_THERM_PARITY'])
-PRINTER_THERM_STOPBITS = int(config['setting']['PRINTER_THERM_STOPBITS'])
-PRINTER_THERM_TIMEOUT = float(config['setting']['PRINTER_THERM_TIMEOUT'])
-PRINTER_THERM_DSRDTR = bool(config['setting']['PRINTER_THERM_DSRDTR'])
+CMD_START_SMOKE_MEASURE = b'\x1bSTART_SMOKE\r\n'
+CMD_STOP_SMOKE_MEASURE = b'\x1bSTOP_SMOKE\r\n'
+CMD_GET_SMOKE_DATA = b'\x1bGET_SMOKE_DATA\r\n'
 
 ## system standard
 STANDARD_MAX_HC = float(config['standard']['STANDARD_MAX_HC']) 
@@ -607,13 +603,13 @@ class ScreenGassEmission(MDScreen):
     def check_device_presence(self, dt):
         available_ports = [port.device for port in list_ports.comports()]
         
-        if COM_PORT in available_ports:
+        if COM_PORT_GASS in available_ports:
             self.update_connection_status(True)
             self.toast_shown = False 
         else:
             self.update_connection_status(False)
             if not self.toast_shown:
-                toast(f"Port {COM_PORT} tidak terhubung ke PC.")
+                toast(f"Port {COM_PORT_GASS} tidak terhubung ke PC.")
                 self.toast_shown = True
 
     def update_connection_status(self, is_connected):
@@ -626,14 +622,14 @@ class ScreenGassEmission(MDScreen):
     
     def exec_start_test(self):
         if "Tidak Terhubung" in self.ids.lb_comm.text:
-            toast(f"Tidak bisa memulai, alat di {COM_PORT} tidak terhubung.")
+            toast(f"Tidak bisa memulai, alat di {COM_PORT_GASS} tidak terhubung.")
             return
         
         try:
-            self.ser = serial.Serial(COM_PORT, BAUD_RATE, timeout=TIMEOUT)
-            toast(f"Berhasil terhubung ke alat di {COM_PORT}")
+            self.ser = serial.Serial(COM_PORT_GASS, BAUD_RATE_GASS, timeout=TIMEOUT_GASS)
+            toast(f"Berhasil terhubung ke alat di {COM_PORT_GASS}")
         except serial.SerialException as e:
-            toast(f"Gagal terhubung ke alat di {COM_PORT}")
+            toast(f"Gagal terhubung ke alat di {COM_PORT_GASS}")
             self.update_connection_status(False)
             Logger.error(f"Serial Connection Error: {e}")
             return
@@ -675,35 +671,6 @@ class ScreenGassEmission(MDScreen):
                 toast("Koneksi serial terputus!")
                 Logger.error(f"Serial Read Error: {e}")
                 self.finish_test(0) 
-
-    # SIMULASI DUMMY    
-    # def exec_start_test(self):
-    #     toast("Memulai mode simulasi...")
-
-    #     self.ids.bt_mulai.disabled = True
-    #     self.ids.lb_test_subtitle.text = "Simulasi pengukuran berlangsung..."
-    #     self.ids.lb_comm.text = "Status: SIMULASI AKTIF" # Menandakan mode simulasi
-    #     self.ids.lb_comm.text_color = self.theme_cls.colors["Green"]["200"] # Warna hijau untuk simulasi
-    #     self.measurement_event = Clock.schedule_interval(self.read_serial_data, 0.5)
-    #     duration = COUNT_STARTING_GASS
-    #     Clock.schedule_once(self.finish_test, duration)
-
-    # def read_serial_data(self, dt):
-    #     try:
-    #         fake_co_val = random.randint(10, 50) 
-    #         fake_hc_val = random.randint(50, 60)
-    #         fake_data_string = f"{fake_co_val:03d}  {fake_hc_val}  {random.randint(100,999)}A 00"
-
-    #         parsed_data = self.parse_data_string_baru(fake_data_string)
-    #         if parsed_data:
-    #             self.latest_hc = parsed_data.get('HC', self.latest_hc)
-    #             self.latest_co = parsed_data.get('CO', self.latest_co)
-                
-    #             self.ids.lb_emission_hc.text = str(self.latest_hc)
-    #             self.ids.lb_emission_co.text = f"{self.latest_co:.2f}"
-
-    #     except Exception as e:
-    #         Logger.error(f"Error di simulasi read_serial_data: {e}")
 
     def parse_data_string_baru(self, data_string: str):
             try:
@@ -821,7 +788,7 @@ class ScreenDieselEmission(MDScreen):
 
     def delayed_init(self, dt):
         self.ids.lb_title.text = APP_TITLE
-        self.ids.lb_subtitle.text = APP_SUBTITLE              
+        self.ids.lb_subtitle.text = APP_SUBTITLE         
         self.ids.img_pemkab.source = f'assets/images/{IMG_LOGO_PEMKAB}'
         self.ids.img_dishub.source = f'assets/images/{IMG_LOGO_DISHUB}'
         self.ids.lb_pemkab.text = LB_PEMKAB
@@ -848,7 +815,7 @@ class ScreenDieselEmission(MDScreen):
 
         self.ids.lb_test_result.text = ""
         self.ids.lb_test_result.md_bg_color = (0,0,0,0)
-        self.ids.lb_emission_smoke.text = "0.00"
+        self.ids.lb_emission_smoke.text = "....." # Diubah agar konsisten
         self.ids.lb_test_subtitle.text = "Tekan MULAI untuk memulai"
         self.ids.bt_mulai.disabled = False
         self.ids.bt_save.disabled = True
@@ -863,42 +830,105 @@ class ScreenDieselEmission(MDScreen):
 
     def check_device_presence(self, dt):
         available_ports = [port.device for port in list_ports.comports()]
-        if COM_PORT in available_ports:
+        if COM_PORT_DIESEL in available_ports:
             self.update_connection_status(True)
             self.toast_shown = False 
         else:
             self.update_connection_status(False)
             if not self.toast_shown:
-                toast(f"Port {COM_PORT} tidak terhubung ke PC.")
+                toast(f"Port {COM_PORT_DIESEL} tidak terhubung ke PC.")
                 self.toast_shown = True
 
     def update_connection_status(self, is_connected):
         if is_connected:
-            self.ids.lb_comm.text = "Status: Connected"
+            self.ids.lb_comm.text = "Com: Terhubung" # Teks disamakan
             self.ids.lb_comm.text_color = self.theme_cls.colors["Green"]["200"]
         else:
-            self.ids.lb_comm.text = "Status: Disconnected"
+            self.ids.lb_comm.text = "Com: Tidak Terhubung" # Teks disamakan
             self.ids.lb_comm.text_color = self.theme_cls.colors["Red"]["A200"]
     
     def exec_start_test(self):
-        toast("Memulai mode simulasi (Diesel)...")
+        if "Tidak Terhubung" in self.ids.lb_comm.text:
+            toast(f"Tidak bisa memulai, alat di {COM_PORT_DIESEL} tidak terhubung.")
+            return
+        
+        try:
+            self.ser = serial.Serial(COM_PORT_DIESEL, BAUD_RATE_DIESEL, timeout=TIMEOUT_DIESEL)
+            toast(f"Berhasil terhubung ke alat di {COM_PORT_DIESEL}")
+        except serial.SerialException as e:
+            toast(f"Gagal terhubung ke alat di {COM_PORT_DIESEL}")
+            self.update_connection_status(False)
+            Logger.error(f"Serial Connection Error: {e}")
+            return
+
+        self.ser.write(CMD_START_SMOKE_MEASURE) # Menggunakan perintah baru
+        time.sleep(1)
+        
         self.ids.bt_mulai.disabled = True
-        self.ids.lb_test_subtitle.text = "Simulasi pengukuran berlangsung..."
+        self.ids.lb_test_subtitle.text = "Pengukuran berlangsung..."
         self.ids.bt_save.disabled = False
-        self.measurement_event = Clock.schedule_interval(self.read_dummy_data, 0.5)
+        self.measurement_event = Clock.schedule_interval(self.read_serial_data, 0.5)
         duration = COUNT_STARTING_DIESEL
         Clock.schedule_once(self.finish_test, duration)
 
-    def read_dummy_data(self, dt):
-        self.latest_smoke = round(random.uniform(10, 80), 2)
-        self.ids.lb_emission_smoke.text = f"{self.latest_smoke:.2f}"
+    def read_serial_data(self, dt):
+        if not self.ser or not self.ser.is_open:
+            return
+        
+        try:
+            self.ser.write(CMD_GET_SMOKE_DATA) # Menggunakan perintah baru
+            response_bytes = self.ser.readline()
+            
+            if response_bytes:
+                response_str = response_bytes.decode('ascii', errors='ignore').strip()
+                parsed_smoke = self.parse_smoke_data(response_str)
+                
+                if parsed_smoke is not None:
+                    self.latest_smoke = parsed_smoke
+                    self.ids.lb_emission_smoke.text = f"{self.latest_smoke:.2f}"
+                elif response_str:
+                    Logger.info(f"Respons lain diterima (Diesel): {response_str}")
+
+        except serial.SerialException as e:
+            toast("Koneksi serial terputus!")
+            Logger.error(f"Serial Read Error (Diesel): {e}")
+            self.finish_test(0)
+
+    def parse_smoke_data(self, data_string: str):
+        """
+        Fungsi untuk mem-parsing data asap.
+        GANTI LOGIKA INI SESUAI FORMAT DATA DARI ALAT ANDA.
+        Contoh asumsi: data yang masuk adalah string seperti "SMOKE: 55.23 %"
+        """
+        try:
+            # Contoh 1: Jika data berbentuk "SMOKE: 55.23 %"
+            if "SMOKE:" in data_string:
+                parts = data_string.split(":")
+                smoke_value = float(parts[1].strip().replace("%", ""))
+                return smoke_value
+            
+            # Contoh 2: Jika data hanya berupa angka "55.23"
+            elif data_string.replace('.', '', 1).isdigit():
+                return float(data_string)
+            
+            # Tambahkan logika parsing lain di sini jika perlu
+            
+            return None # Kembalikan None jika format tidak dikenali
+        except (ValueError, IndexError) as e:
+            Logger.error(f"Gagal parsing data asap: '{data_string}', error: {e}")
+            return None
 
     def finish_test(self, dt):
         if self.measurement_event:
             Clock.unschedule(self.measurement_event)
             self.measurement_event = None
         
-        toast("Pengukuran Otomatis Selesai.")
+        if self.ser and self.ser.is_open:
+            self.ser.write(CMD_STOP_SMOKE_MEASURE) # Menggunakan perintah baru
+            time.sleep(1)
+            self.ser.close()
+        
+        toast("Pengukuran Selesai.")
         self.ids.lb_test_subtitle.text = "Siap untuk uji ulang atau simpan."
         self.ids.bt_mulai.disabled = False
         self.evaluate_results()
@@ -950,6 +980,8 @@ class ScreenDieselEmission(MDScreen):
     def exec_navigate_main(self):
         if hasattr(self, 'measurement_event') and self.measurement_event:
             Clock.unschedule(self.measurement_event)
+        if self.ser and self.ser.is_open:
+            self.ser.close()
         self.screen_manager.current = 'screen_main'
 
 class RootScreen(ScreenManager):
