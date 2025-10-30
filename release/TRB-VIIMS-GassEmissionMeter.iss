@@ -2,9 +2,9 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "VIIMS - Gass Emission Meter Application"
-#define MyAppVersion "2.2.251003"
+#define MyAppVersion "2.3.251030"
 #define MyAppPublisher "PT. Tiga Ratu Berkarya"
-#define MyAppExeName "TRB-VIIMS-GassEmissionMeterApp.exe"
+#define MyAppExeName "TRB-VIIMS-GassEmissionMeterApp-Sorong.exe"
 #define MyAppAssocName "VIIMS - Gass Emission Meter Application Files"
 #define MyAppAssocExt ".msi"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
@@ -30,7 +30,7 @@ ChangesAssociations=yes
 DisableProgramGroupPage=yes
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
 ;PrivilegesRequired=lowest
-OutputBaseFilename=TRB-VIIMS-GassEmissionMeterApp-Installer
+OutputBaseFilename=TRB-VIIMS-GassEmissionMeterApp-Sorong-Installer
 SetupIconFile=D:\PRJ\TRB - Vehicle Inspection Integration Management System\trb-dsk-pykivy-gass-emission-meter-app\release\Application Folder\assets\images\logo-emission-app.ico
 Compression=lzma
 SolidCompression=yes
