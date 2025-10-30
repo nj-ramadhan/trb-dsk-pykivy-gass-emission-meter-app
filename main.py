@@ -22,7 +22,7 @@ logger_name = f'app.log'
 logger_dir = os.path.join(application_path, "logs")
 
 from kivy.config import Config
-Config.set('kivy', 'keyboard_mode', 'system')
+Config.set('kivy', 'keyboard_mode', 'systemanddock')
 
 from kivy.logger import Logger
 from kivy.clock import Clock
@@ -124,6 +124,21 @@ class ScreenHome(MDScreen):
 
     def on_enter(self):
         Clock.schedule_interval(self.regular_update_carousel, 3)
+        Clock.schedule_once(self.check_initial_status, 0)
+
+    def check_initial_status(self):
+        self.ids.lb_info.text = "Memeriksa koneksi ke database..."
+        self.ids.lb_info.text_color = self.theme_cls.text_color
+        try:
+            # Coba koneksi cepat
+            test_db = mysql.connector.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME, connection_timeout=5)
+            test_db.close()
+            self.ids.lb_info.text = "Sistem siap digunakan. Silakan login untuk memulai pengujian."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Green']['500']
+        except Exception as e:
+            self.ids.lb_info.text = "Gagal terhubung ke database. Periksa koneksi jaringan."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
+            Logger.error(f"Home Screen: Database connection failed - {e}")
 
     def on_leave(self):
         Clock.unschedule(self.regular_update_carousel)
@@ -171,6 +186,10 @@ class ScreenLogin(MDScreen):
     def __init__(self, **kwargs):
         super(ScreenLogin, self).__init__(**kwargs)
         Clock.schedule_once(self.delayed_init, 1)
+
+    def on_enter(self):
+        self.ids.lb_info.text = "Masukkan nama pengguna dan kata sandi Anda untuk melanjutkan."
+        self.ids.lb_info.text_color = self.theme_cls.secondary_text_color
     
     def delayed_init(self, dt):
         self.ids.lb_title.text = APP_TITLE
@@ -193,6 +212,8 @@ class ScreenLogin(MDScreen):
         global mydb, db_users
         global dt_id_user, dt_user, dt_foto_user
         screen_main = self.screen_manager.get_screen('screen_main')
+        self.ids.lb_info.text = "Mengautentikasi pengguna... Mohon tunggu." # <-- Tambahkan ini
+        self.ids.lb_info.text_color = self.theme_cls.text_color
 
         try:
             screen_main.exec_reload_database()
@@ -207,6 +228,8 @@ class ScreenLogin(MDScreen):
             
             if myresult is None:
                 toast_msg = f'Gagal Masuk, Nama Pengguna atau Password Salah'
+                self.ids.lb_info.text = "Nama pengguna atau kata sandi salah. Silakan coba lagi." # <-- Tambahkan ini
+                self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
                 toast(toast_msg) 
                 Logger.warning(f"{self.name}: {toast_msg}") 
             else:
@@ -222,6 +245,8 @@ class ScreenLogin(MDScreen):
 
         except Exception as e:
             toast_msg = f'Gagal masuk, silahkan isi nama user dan password yang sesuai'
+            self.ids.lb_info.text = "Gagal terhubung ke server. Periksa koneksi Anda." # <-- Tambahkan ini
+            self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
             toast(toast_msg)  
             Logger.error(f"{self.name}: {toast_msg}, {e}")  
 
@@ -268,11 +293,13 @@ class ScreenMain(MDScreen):
         global emission_co_value, emission_co_flag
         global emission_smoke_value, emission_smoke_flag
         global dt_dash_pendaftaran, dt_dash_belum_uji, dt_dash_sudah_uji
+        global dt_kd_jnskendaraan
 
         dt_user = dt_foto_user = dt_no_antri = dt_no_pol = dt_no_uji = dt_sts_uji = dt_nama = ""
         dt_merk = dt_type = dt_jns_kend = dt_jbb = dt_brt_ksg = dt_bhn_bkr = dt_warna = dt_chasis = dt_no_mesin = ""
         dt_id_user = 1
         dt_dash_pendaftaran = dt_dash_belum_uji = dt_dash_sudah_uji = 0
+        dt_kd_jnskendaraan = ""
         
         emission_hc_value = emission_hc_flag = 0
         emission_co_value = emission_co_flag = 0
@@ -295,6 +322,8 @@ class ScreenMain(MDScreen):
     def on_enter(self):
         self.exec_reload_database()
         self.exec_reload_table()
+        self.ids.lb_info.text = "Pilih kendaraan dari tabel untuk memulai pengujian."
+        self.ids.lb_info.text_color = self.theme_cls.secondary_text_color
 
     def regular_update_display(self, dt):
         try:
@@ -344,6 +373,8 @@ class ScreenMain(MDScreen):
 
     def exec_reload_table(self):
         print("\n--- FUNGSI exec_reload_table DIPANGGIL ---")
+        self.ids.lb_info.text = "Memuat data antrian terbaru... Mohon tunggu." # <-- Tambahkan di awal
+        self.ids.lb_info.text_color = self.theme_cls.text_color
         global mydb, db_antrian, db_merk, db_bahan_bakar, db_warna
         global dt_dash_pendaftaran, dt_dash_belum_uji, dt_dash_sudah_uji
 
@@ -376,16 +407,16 @@ class ScreenMain(MDScreen):
             dt_dash_belum_uji = dt_dash_pendaftaran - dt_dash_sudah_uji
 
             belum_uji_logic = """
-                (
-                    (bahan_bakar = 'B' AND (emission_hc_flag NOT IN (0, 1) OR emission_co_flag NOT IN (0, 1)))
-                    OR
-                    (bahan_bakar = 'S' AND (emission_smoke_flag NOT IN (0, 1)))
-                )
-            """
+                        (
+                            (bahan_bakar = 'B' AND (emission_hc_flag = 2 OR emission_co_flag = 2))
+                            OR
+                            (bahan_bakar = 'S' AND emission_smoke_flag = 2)
+                        )
+                    """
             query_table = f"""
                 SELECT noantrian, nopol, nouji, statusuji, merk, type, idjeniskendaraan, 
                     jbb, berat_kosong, bahan_bakar, warna, th_buat,
-                    emission_hc_flag, emission_co_flag, emission_smoke_flag 
+                    emission_hc_flag, emission_co_flag, emission_smoke_flag, kd_jnskendaraan
                 FROM {TB_DATA} 
                 WHERE {belum_uji_logic} AND DATE(tgl_daftar) = %s
             """
@@ -405,6 +436,8 @@ class ScreenMain(MDScreen):
             layout_list.clear_widgets()
             if db_antrian.size == 0:
                 layout_list.add_widget(MDLabel(text="Semua kendaraan sudah diuji.", halign="center", theme_text_color="Secondary"))
+                self.ids.lb_info.text = "Tidak ada kendaraan dalam antrian yang perlu diuji." 
+                self.ids.lb_info.text_color = self.theme_cls.colors['Blue']['500']
                 return
 
             for i in range(db_antrian.shape[1]):
@@ -454,8 +487,12 @@ class ScreenMain(MDScreen):
                         size_hint_y=None, height=dp(40)
                     )
                 )
+                self.ids.lb_info.text = "Pilih kendaraan dari tabel untuk memulai pengujian emisi." 
+                self.ids.lb_info.text_color = self.theme_cls.secondary_text_color
         except Exception as e:
             toast('Gagal memuat ulang tabel antrian')
+            self.ids.lb_info.text = "Gagal memuat data antrian. Periksa koneksi." 
+            self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
             Logger.error(f"{self.name}: Gagal render tabel, {e}")
         
         self.exec_reload_database()
@@ -463,7 +500,7 @@ class ScreenMain(MDScreen):
     def on_antrian_row_press(self, instance):
         global dt_user, dt_no_antri, dt_no_pol, dt_no_uji, dt_sts_uji, dt_merk, dt_type
         global dt_jns_kend, dt_jbb, dt_brt_ksg, dt_bhn_bkr, dt_warna, dt_nama, dt_thn_buat 
-
+        global dt_kd_jnskendaraan
         try:
             if not dt_user:
                 toast("Silakan login terlebih dahulu.")
@@ -485,6 +522,7 @@ class ScreenMain(MDScreen):
             emission_hc_flag = db_antrian[12, row]
             emission_co_flag = db_antrian[13, row]
             emission_smoke_flag = db_antrian[14, row]
+            dt_kd_jnskendaraan = db_antrian[15, row]
             
             fuel_name_row = db_bahan_bakar[db_bahan_bakar[:, 0] == dt_bhn_bkr]
             fuel_text = fuel_name_row[0, 1] if fuel_name_row.size > 0 else 'Tak Dikenal'
@@ -591,6 +629,8 @@ class ScreenGassEmission(MDScreen):
         self.ids.lb_test_subtitle.text = "Tekan MULAI untuk memulai"
         self.ids.bt_mulai.disabled = False
         self.ids.bt_save.disabled = True
+        self.ids.lb_info.text = "Pastikan probe terpasang dengan benar. Tekan 'MULAI' untuk memulai."
+        self.ids.lb_info.text_color = self.theme_cls.secondary_text_color
 
     def on_leave(self):
         if self.port_check_event:
@@ -623,6 +663,8 @@ class ScreenGassEmission(MDScreen):
     def exec_start_test(self):
         if "Tidak Terhubung" in self.ids.lb_comm.text:
             toast(f"Tidak bisa memulai, alat di {COM_PORT_GASS} tidak terhubung.")
+            self.ids.lb_info.text = "Alat uji tidak terdeteksi. Periksa koneksi fisik pada port."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
             return
         
         try:
@@ -636,7 +678,8 @@ class ScreenGassEmission(MDScreen):
 
         self.ser.write(CMD_START_MEASURE)
         time.sleep(1)
-
+        self.ids.lb_info.text = "Pengujian sedang berlangsung... Harap pertahankan RPM mesin tetap stabil."
+        self.ids.lb_info.text_color = self.theme_cls.colors['Blue']['500']
         self.ids.bt_mulai.disabled = True
         self.ids.lb_test_subtitle.text = "Pengukuran berlangsung..."
         self.ids.bt_save.disabled = False
@@ -710,24 +753,45 @@ class ScreenGassEmission(MDScreen):
             self.ser.close()
         
         toast("Pengukuran Selesai...")
+        self.ids.lb_info.text = "Pengujian selesai. Periksa hasil lalu tekan 'SIMPAN' untuk merekam data."
+        self.ids.lb_info.text_color = self.theme_cls.colors['Green']['500']
         self.ids.lb_test_subtitle.text = "Siap untuk uji ulang atau simpan."
         self.ids.bt_mulai.disabled = False
         self.evaluate_results()
 
+
     def evaluate_results(self):
-        global emission_hc_flag, emission_co_flag
+        global emission_hc_flag, emission_co_flag, dt_kd_jnskendaraan
         try:
             hc_val = self.latest_hc
             co_val = self.latest_co
             tahun = int(dt_thn_buat)
 
-            max_co, max_hc = 0, 0
-            if tahun < 2007:
-                max_co, max_hc = 4.0, 1000
-            elif 2007 <= tahun <= 2018:
-                max_co, max_hc = 1.0, 150
-            else:  # tahun > 2018
-                max_co, max_hc = 0.5, 100
+            max_co = 0.0
+            max_hc = 0
+
+            if dt_kd_jnskendaraan and dt_kd_jnskendaraan.upper() not in ('A', 'B'):
+                Logger.info(f"Menggunakan aturan emisi khusus untuk kd_jnskendaraan: {dt_kd_jnskendaraan}")
+                if tahun < 2007:
+                    max_hc = 1100
+                elif 2007 <= tahun <= 2018:
+                    max_hc = 200
+                else: 
+                    max_hc = 150
+                if tahun < 2007:
+                    max_co = 4.0
+                elif 2007 <= tahun <= 2018:
+                    max_co = 1.0
+                else: # > 2018
+                    max_co = 0.5
+            else:
+                Logger.info(f"Menggunakan aturan emisi standar (A/B) untuk kd_jnskendaraan: {dt_kd_jnskendaraan}")
+                if tahun < 2007:
+                    max_co, max_hc = 4.0, 1000
+                elif 2007 <= tahun <= 2018:
+                    max_co, max_hc = 1.0, 150
+                else:  # tahun > 2018
+                    max_co, max_hc = 0.5, 100
             
             emission_hc_flag = 1 if hc_val <= max_hc else 0
             emission_co_flag = 1 if co_val <= max_co else 0
@@ -744,24 +808,30 @@ class ScreenGassEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi hasil - {e}")
 
     def exec_save(self):
+        global dt_id_user, dt_no_antri 
         try:
             self.evaluate_results()
             
+            dt_emission_post = time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())
+
             cursor = mydb.cursor()
             sql = f"""UPDATE {TB_DATA} SET 
                          emission_hc_value = %s, 
                          emission_hc_flag = %s, 
                          emission_co_value = %s, 
-                         emission_co_flag = %s 
+                         emission_co_flag = %s,
+                         emission_user = %s,
+                         emission_post = %s
                       WHERE noantrian = %s"""
-            val = (self.latest_hc, emission_hc_flag, self.latest_co, emission_co_flag, dt_no_antri)
+            val = (self.latest_hc, emission_hc_flag, self.latest_co, emission_co_flag, dt_id_user, dt_emission_post, dt_no_antri)
             
             cursor.execute(sql, val)
             mydb.commit()
             
             toast(f"Data berhasil disimpan!")
             self.ids.lb_test_subtitle.text = f"Data terakhir disimpan: HC={self.latest_hc}, CO={self.latest_co}"
-
+            self.ids.lb_info.text = f"Data untuk {dt_no_pol} berhasil disimpan. Kembali ke menu utama."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Green']['500']
         except Exception as e:
             toast("Gagal menyimpan data ke database.")
             Logger.error(f"{self.name}: Save Gas Error, {e}")
@@ -798,6 +868,8 @@ class ScreenDieselEmission(MDScreen):
 
     def on_enter(self):
         try:
+            self.ids.lb_info.text = "Pastikan probe terpasang dengan benar. Tekan 'MULAI' untuk memulai."
+            self.ids.lb_info.text_color = self.theme_cls.secondary_text_color
             self.ids.lb_no_antrian.text = str(dt_no_antri)
             self.ids.lb_no_pol.text = str(dt_no_pol)
             self.ids.lb_no_uji.text = str(dt_no_uji)
@@ -850,10 +922,14 @@ class ScreenDieselEmission(MDScreen):
     def exec_start_test(self):
         if "Tidak Terhubung" in self.ids.lb_comm.text:
             toast(f"Tidak bisa memulai, alat di {COM_PORT_DIESEL} tidak terhubung.")
+            self.ids.lb_info.text = "Alat uji tidak terdeteksi. Periksa koneksi fisik pada port."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
             return
         
         try:
             self.ser = serial.Serial(COM_PORT_DIESEL, BAUD_RATE_DIESEL, timeout=TIMEOUT_DIESEL)
+            self.ids.lb_info.text = "Pengujian sedang berlangsung... Harap pertahankan RPM mesin tetap stabil."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Blue']['500']
             toast(f"Berhasil terhubung ke alat di {COM_PORT_DIESEL}")
         except serial.SerialException as e:
             toast(f"Gagal terhubung ke alat di {COM_PORT_DIESEL}")
@@ -895,11 +971,7 @@ class ScreenDieselEmission(MDScreen):
             self.finish_test(0)
 
     def parse_smoke_data(self, data_string: str):
-        """
-        Fungsi untuk mem-parsing data asap.
-        GANTI LOGIKA INI SESUAI FORMAT DATA DARI ALAT ANDA.
-        Contoh asumsi: data yang masuk adalah string seperti "SMOKE: 55.23 %"
-        """
+
         try:
             # Contoh 1: Jika data berbentuk "SMOKE: 55.23 %"
             if "SMOKE:" in data_string:
@@ -931,6 +1003,8 @@ class ScreenDieselEmission(MDScreen):
         toast("Pengukuran Selesai.")
         self.ids.lb_test_subtitle.text = "Siap untuk uji ulang atau simpan."
         self.ids.bt_mulai.disabled = False
+        self.ids.lb_info.text = "Pengujian selesai. Periksa hasil lalu tekan 'SIMPAN' untuk merekam data."
+        self.ids.lb_info.text_color = self.theme_cls.colors['Green']['500']
         self.evaluate_results()
 
     def evaluate_results(self):
@@ -962,19 +1036,26 @@ class ScreenDieselEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi diesel - {e}")
 
     def exec_save(self):
+        global dt_id_user, dt_no_antri
         try:
             self.evaluate_results()
             
+            dt_emission_post = time.strftime("%Y/%m/%d %H:%M:%S", time.localtime())
+
             cursor = mydb.cursor()
-            sql = f"UPDATE {TB_DATA} SET emission_smoke_value = %s, emission_smoke_flag = %s WHERE noantrian = %s"
-            val = (self.latest_smoke, emission_smoke_flag, dt_no_antri)
+            sql = f"UPDATE {TB_DATA} SET emission_smoke_value = %s, emission_smoke_flag = %s, emission_user = %s, emission_post = %s WHERE noantrian = %s"
+            val = (self.latest_smoke, emission_smoke_flag, dt_id_user, dt_emission_post, dt_no_antri)            
             cursor.execute(sql, val)
             mydb.commit()
             
             toast("Hasil Uji Diesel Berhasil Disimpan.")
+            self.ids.lb_info.text = f"Data untuk {dt_no_pol} berhasil disimpan. Kembali ke menu utama."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Green']['500']
             self.ids.lb_test_subtitle.text = f"Data terakhir disimpan: Asap={self.latest_smoke}%"
         except Exception as e:
             toast("Gagal menyimpan data ke database.")
+            self.ids.lb_info.text = "Gagal menyimpan data. Periksa koneksi ke database."
+            self.ids.lb_info.text_color = self.theme_cls.colors['Red']['A200']
             Logger.error(f"{self.name}: Save Diesel Error, {e}")
 
     def exec_navigate_main(self):
