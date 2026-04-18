@@ -44,6 +44,10 @@ from pymodbus.client import ModbusTcpClient
 from fpdf import FPDF
 from escpos.printer import Serial
 
+dt_id_user = 0
+dt_user = ""
+dt_foto_user = ""
+
 colors = {
     "Red"   : {"A200": "#FF2A2A","A500": "#FF8080","A700": "#FFD5D5",},
     "Gray"  : {"200": "#CCCCCC","500": "#ECECEC","700": "#F9F9F9",},
@@ -70,9 +74,9 @@ LB_UNIT = config['app']['LB_UNIT']
 LB_UNIT_ADDRESS = config['app']['LB_UNIT_ADDRESS']
 
 # SQL setting
-DB_HOST = "194.31.53.37"
-DB_USER = "Pndujikir2022!"
-DB_PASSWORD = "@Kirpnd2022!"
+DB_HOST = "187.77.112.162"
+DB_USER = "Pndujikir2026!"
+DB_PASSWORD = "@PndKir2026!"
 
 DB_NAME = "pkbpandeglang"
 TB_DATA = "tb_cekident"
@@ -82,9 +86,9 @@ TB_BAHAN_BAKAR = "bahanbakar"
 TB_WARNA = "warna"
 TB_DATA_MASTER = "identkendaraan"
 
-FTP_HOST = "194.31.53.37"
+FTP_HOST = "187.117.112.162"
 FTP_USER = "root"
-FTP_PASS = "@D15HUBp2022!"
+FTP_PASS = "@SorongNew2026"
 
 ## System Setting
 COUNT_STARTING_GASS = int(config['setting']['COUNT_STARTING_GASS'])
@@ -194,40 +198,50 @@ class ScreenLogin(MDScreen):
             toast_msg = f'error Login: {e}'
 
     def exec_login(self):
-        global mydb, db_users
-        global dt_id_user, dt_user, dt_foto_user
+        global mydb, dt_id_user, dt_user, dt_foto_user
         screen_main = self.screen_manager.get_screen('screen_main')
+
+        TB_WEB_USER = "web_users" 
 
         try:
             screen_main.exec_reload_database()
-            input_username = self.ids.tx_username.text
+            input_email = self.ids.tx_username.text
             input_password = self.ids.tx_password.text        
-            dataBase_password = input_password
-            hashed_password = hashlib.md5(dataBase_password.encode())
-            mycursor = mydb.cursor()
-            mycursor.execute(f"SELECT id_user, nama, username, password, image FROM {TB_USER} WHERE username = '{input_username}' and password = '{hashed_password.hexdigest()}'")
-            myresult = mycursor.fetchone()
-            db_users = np.array(myresult).T
             
-            if myresult is None:
-                toast_msg = f'Gagal Masuk, Nama Pengguna atau Password Salah'
-                toast(toast_msg) 
-                Logger.warning(f"{self.name}: {toast_msg}") 
+            mycursor = mydb.cursor()
+            
+            # Query sesuai instruksi: mencari email dengan tipe_user = '2'
+            query = f"SELECT id, name, email, password FROM {TB_WEB_USER} WHERE email = %s AND tipe_user = '2'"
+            
+            mycursor.execute(query, (input_email,))
+            myresult = mycursor.fetchone()
+            
+            if myresult:
+                db_id = myresult[0]
+                db_name = myresult[1]
+                db_hashed_password = myresult[3] 
+
+                # Verifikasi menggunakan Bcrypt
+                import bcrypt
+                if bcrypt.checkpw(input_password.encode('utf-8'), db_hashed_password.encode('utf-8')):
+                    toast(f"Berhasil Masuk, Selamat Datang {db_name}")
+                    
+                    # Simpan data ke variabel global
+                    dt_id_user = db_id
+                    dt_user = db_name
+                    dt_foto_user = "" # Kosong karena tidak ada kolom image
+                    
+                    self.ids.tx_username.text = ""
+                    self.ids.tx_password.text = "" 
+                    self.screen_manager.current = 'screen_main'
+                else:
+                    toast("maaf username dan password tidak sesuai")
             else:
-                toast_msg = f'Berhasil Masuk, Selamat Datang {myresult[1]}'
-                toast(toast_msg)
-                Logger.info(f"{self.name}: {toast_msg}")  
-                dt_id_user = myresult[0]
-                dt_user = myresult[1]
-                dt_foto_user = myresult[4]
-                self.ids.tx_username.text = ""
-                self.ids.tx_password.text = "" 
-                self.screen_manager.current = 'screen_main'
+                toast("maaf username dan password tidak sesuai")
 
         except Exception as e:
-            toast_msg = f'Gagal masuk, silahkan isi nama user dan password yang sesuai'
-            toast(toast_msg)  
-            Logger.error(f"{self.name}: {toast_msg}, {e}")  
+            Logger.error(f"Login Error: {e}")
+            toast(f"Gagal masuk: {e}")
 
     def exec_navigate_home(self):
         try:
@@ -275,7 +289,7 @@ class ScreenMain(MDScreen):
 
         dt_user = dt_foto_user = dt_no_antri = dt_no_pol = dt_no_uji = dt_sts_uji = dt_nama = ""
         dt_merk = dt_type = dt_jns_kend = dt_jbb = dt_brt_ksg = dt_bhn_bkr = dt_warna = dt_chasis = dt_no_mesin = ""
-        dt_id_user = 1
+        dt_id_user = 0
         dt_dash_pendaftaran = dt_dash_belum_uji = dt_dash_sudah_uji = 0
         
         emission_hc_value = emission_hc_flag = 0
@@ -777,27 +791,37 @@ class ScreenGassEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi hasil - {e}")
 
     def exec_save(self):
+        global mydb, dt_no_antri, dt_id_user # Tambahkan dt_id_user
         try:
             self.evaluate_results()
             
+            # Ambil waktu sekarang
+            now = datetime.datetime.now()
+            waktu_simpan = now.strftime("%H:%M:%S")
+            
             cursor = mydb.cursor()
+            # Tambahkan kolom emission_user dan emission_post
             sql = f"""UPDATE {TB_DATA} SET 
                          emission_hc_value = %s, 
                          emission_hc_flag = %s, 
                          emission_co_value = %s, 
-                         emission_co_flag = %s 
+                         emission_co_flag = %s,
+                         emission_user = %s,
+                         emission_post = %s
                       WHERE noantrian = %s"""
-            val = (self.latest_hc, emission_hc_flag, self.latest_co, emission_co_flag, dt_no_antri)
+            
+            val = (self.latest_hc, emission_hc_flag, self.latest_co, emission_co_flag, 
+                   dt_id_user, waktu_simpan, dt_no_antri)
             
             cursor.execute(sql, val)
             mydb.commit()
             
-            toast(f"Data berhasil disimpan!")
-            self.ids.lb_test_subtitle.text = f"Data terakhir disimpan: HC={self.latest_hc}, CO={self.latest_co}"
+            toast(f"Data disimpan oleh ID: {dt_id_user}")
+            self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
 
         except Exception as e:
-            toast("Gagal menyimpan data ke database.")
-            Logger.error(f"{self.name}: Save Gas Error, {e}")
+            toast("Gagal menyimpan data.")
+            Logger.error(f"Save Gas Error: {e}")
 
     def exec_print(self):
         toast("Fungsi Print Belum Diimplementasikan")
@@ -932,20 +956,33 @@ class ScreenDieselEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi diesel - {e}")
 
     def exec_save(self):
+        global mydb, dt_no_antri, dt_id_user # Tambahkan dt_id_user
         try:
             self.evaluate_results()
             
+            now = datetime.datetime.now()
+            waktu_simpan = now.strftime("%H:%M:%S")
+            
             cursor = mydb.cursor()
-            sql = f"UPDATE {TB_DATA} SET emission_smoke_value = %s, emission_smoke_flag = %s WHERE noantrian = %s"
-            val = (self.latest_smoke, emission_smoke_flag, dt_no_antri)
+            # Update query untuk menyertakan user dan post
+            sql = f"""UPDATE {TB_DATA} SET 
+                        emission_smoke_value = %s, 
+                        emission_smoke_flag = %s,
+                        emission_user = %s,
+                        emission_post = %s
+                      WHERE noantrian = %s"""
+            
+            val = (self.latest_smoke, emission_smoke_flag, dt_id_user, waktu_simpan, dt_no_antri)
+            
             cursor.execute(sql, val)
             mydb.commit()
             
-            toast("Hasil Uji Diesel Berhasil Disimpan.")
-            self.ids.lb_test_subtitle.text = f"Data terakhir disimpan: Asap={self.latest_smoke}%"
+            toast(f"Data disimpan oleh ID: {dt_id_user}")
+            self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
+            
         except Exception as e:
-            toast("Gagal menyimpan data ke database.")
-            Logger.error(f"{self.name}: Save Diesel Error, {e}")
+            toast("Gagal menyimpan data.")
+            Logger.error(f"Save Diesel Error: {e}")
 
     def exec_navigate_main(self):
         if hasattr(self, 'measurement_event') and self.measurement_event:
