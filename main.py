@@ -465,7 +465,7 @@ class ScreenMain(MDScreen):
                         MDLabel(text=warna_text, halign="center", size_hint_x=0.07),            
                         MDLabel(text=(hc_stat if not is_diesel else '-'), halign="center", size_hint_x=0.05), 
                         MDLabel(text=(co_stat if not is_diesel else '-'), halign="center", size_hint_x=0.05), 
-                        MDLabel(text=(smoke_stat if is_diesel else '-'), halign="center", size_hint_x=0.05),
+                        # MDLabel(text=(smoke_stat if is_diesel else '-'), halign="center", size_hint_x=0.05),
                         ripple_behavior=True,
                         on_press=self.on_antrian_row_press,
                         padding="10dp", id=f"card_antrian{i}",
@@ -478,50 +478,105 @@ class ScreenMain(MDScreen):
         
         self.exec_reload_database()
 
+# INI UNTUK HC CO DAN SMOKE
+    # def on_antrian_row_press(self, instance):
+    #     global dt_user, dt_no_antri, dt_no_pol, dt_no_uji, dt_sts_uji, dt_merk, dt_type
+    #     global dt_jns_kend, dt_jbb, dt_brt_ksg, dt_bhn_bkr, dt_warna, dt_nama, dt_thn_buat 
+
+    #     try:
+    #         if not dt_user:
+    #             toast("Silakan login terlebih dahulu.")
+    #             return
+
+    #         row = int(str(instance.id).replace("card_antrian", ""))
+    #         dt_no_antri = db_antrian[0, row]
+    #         dt_no_pol = db_antrian[1, row]
+    #         dt_no_uji = db_antrian[2, row]
+    #         dt_sts_uji = db_antrian[3, row]
+    #         dt_merk = db_antrian[4, row]
+    #         dt_type = db_antrian[5, row]
+    #         dt_jns_kend = db_antrian[6, row]
+    #         dt_jbb = db_antrian[7, row]
+    #         dt_brt_ksg = db_antrian[8, row]
+    #         dt_bhn_bkr = db_antrian[9, row]
+    #         dt_warna = db_antrian[10, row]
+    #         dt_thn_buat = db_antrian[11, row]
+    #         emission_hc_flag = db_antrian[12, row]
+    #         emission_co_flag = db_antrian[13, row]
+    #         emission_smoke_flag = db_antrian[14, row]
+            
+    #         fuel_name_row = db_bahan_bakar[db_bahan_bakar[:, 0] == dt_bhn_bkr]
+    #         fuel_text = fuel_name_row[0, 1] if fuel_name_row.size > 0 else 'Tak Dikenal'
+
+    #         if 'SOLAR' in fuel_text.upper():
+    #             if emission_smoke_flag == 1 or emission_smoke_flag == 0:
+    #                 toast(f"Kendaraan {dt_no_pol} sudah selesai diuji emisi.")
+    #                 return 
+    #             else:
+    #                 self.screen_manager.current = 'screen_diesel_emission'
+    #         elif 'BENSIN' in fuel_text.upper():
+    #             if (emission_hc_flag == 1 or emission_hc_flag == 0) and (emission_co_flag == 1 or emission_co_flag == 0):
+    #                 toast(f"Kendaraan {dt_no_pol} sudah selesai diuji emisi.")
+    #                 return 
+    #             else:
+    #                 self.screen_manager.current = 'screen_gass_emission'
+    #         else:
+    #             toast("Jenis bahan bakar tidak sesuai untuk pengujian emisi.")
+    #             return
+
+    #     except Exception as e:
+    #         toast('Gagal memproses data antrian')
+    #         Logger.error(f"{self.name}: Row Press Error, {e}")
+
     def on_antrian_row_press(self, instance):
         global dt_user, dt_no_antri, dt_no_pol, dt_no_uji, dt_sts_uji, dt_merk, dt_type
         global dt_jns_kend, dt_jbb, dt_brt_ksg, dt_bhn_bkr, dt_warna, dt_nama, dt_thn_buat 
 
         try:
+            # 1. Validasi Login
             if not dt_user:
                 toast("Silakan login terlebih dahulu.")
                 return
 
+            # 2. Ambil Index Row dari ID Card
             row = int(str(instance.id).replace("card_antrian", ""))
-            dt_no_antri = db_antrian[0, row]
-            dt_no_pol = db_antrian[1, row]
-            dt_no_uji = db_antrian[2, row]
-            dt_sts_uji = db_antrian[3, row]
-            dt_merk = db_antrian[4, row]
-            dt_type = db_antrian[5, row]
-            dt_jns_kend = db_antrian[6, row]
-            dt_jbb = db_antrian[7, row]
-            dt_brt_ksg = db_antrian[8, row]
-            dt_bhn_bkr = db_antrian[9, row]
-            dt_warna = db_antrian[10, row]
-            dt_thn_buat = db_antrian[11, row]
-            emission_hc_flag = db_antrian[12, row]
-            emission_co_flag = db_antrian[13, row]
-            emission_smoke_flag = db_antrian[14, row]
             
-            fuel_name_row = db_bahan_bakar[db_bahan_bakar[:, 0] == dt_bhn_bkr]
-            fuel_text = fuel_name_row[0, 1] if fuel_name_row.size > 0 else 'Tak Dikenal'
+            # 3. Mapping Data dari Array ke Variabel Global
+            dt_no_antri = db_antrian[0, row]
+            dt_no_pol   = db_antrian[1, row]
+            dt_no_uji   = db_antrian[2, row]
+            dt_sts_uji  = db_antrian[3, row]
+            dt_merk     = db_antrian[4, row]
+            dt_type     = db_antrian[5, row]
+            dt_jns_kend = db_antrian[6, row]
+            dt_jbb      = db_antrian[7, row]
+            dt_brt_ksg  = db_antrian[8, row]
+            dt_bhn_bkr  = db_antrian[9, row]
+            dt_warna    = db_antrian[10, row]
+            dt_thn_buat = db_antrian[11, row]
+            
+            # Ambil flag status untuk HC dan CO (Index 12 dan 13)
+            e_hc_flag = db_antrian[12, row]
+            e_co_flag = db_antrian[13, row]
 
-            if 'SOLAR' in fuel_text.upper():
-                if emission_smoke_flag == 1 or emission_smoke_flag == 0:
+            # 4. Identifikasi Bahan Bakar
+            fuel_name_row = db_bahan_bakar[db_bahan_bakar[:, 0] == dt_bhn_bkr]
+            fuel_text = fuel_name_row[0, 1].upper() if fuel_name_row.size > 0 else 'TAK DIKENAL'
+
+            # 5. Logika Navigasi (Fokus ke Bensin)
+            if 'BENSIN' in fuel_text:
+                # Cek jika sudah pernah diuji (Flag 0 atau 1 berarti sudah ada hasil)
+                if e_hc_flag in [0, 1] and e_co_flag in [0, 1]:
                     toast(f"Kendaraan {dt_no_pol} sudah selesai diuji emisi.")
-                    return 
                 else:
-                    self.screen_manager.current = 'screen_diesel_emission'
-            elif 'BENSIN' in fuel_text.upper():
-                if (emission_hc_flag == 1 or emission_hc_flag == 0) and (emission_co_flag == 1 or emission_co_flag == 0):
-                    toast(f"Kendaraan {dt_no_pol} sudah selesai diuji emisi.")
-                    return 
-                else:
+                    # Menuju layar uji Bensin
                     self.screen_manager.current = 'screen_gass_emission'
+            
+            elif 'SOLAR' in fuel_text:
+                toast("Kendaraan Diesel. Silakan gunakan alat uji Smoke.")
+            
             else:
-                toast("Jenis bahan bakar tidak sesuai untuk pengujian emisi.")
-                return
+                toast("Bahan bakar tidak mendukung pengujian HC/CO.")
 
         except Exception as e:
             toast('Gagal memproses data antrian')
@@ -693,12 +748,21 @@ class ScreenGassEmission(MDScreen):
     # SIMULASI DUMMY    
     # def exec_start_test(self):
     #     toast("Memulai mode simulasi...")
+        
+    #     # Reset data lama agar tidak membingungkan
+    #     self.latest_hc = 0
+    #     self.latest_co = 0.0
+    #     self.ids.bt_save.disabled = True # Pastikan tombol simpan mati saat tes jalan
 
     #     self.ids.bt_mulai.disabled = True
     #     self.ids.lb_test_subtitle.text = "Simulasi pengukuran berlangsung..."
-    #     self.ids.lb_comm.text = "Status: SIMULASI AKTIF" # Menandakan mode simulasi
-    #     self.ids.lb_comm.text_color = self.theme_cls.colors["Green"]["200"] # Warna hijau untuk simulasi
+    #     self.ids.lb_comm.text = "Status: SIMULASI AKTIF"
+    #     self.ids.lb_comm.text_color = self.theme_cls.colors["Green"]["200"]
+        
+    #     # Jalankan pembacaan data palsu
     #     self.measurement_event = Clock.schedule_interval(self.read_serial_data, 0.5)
+        
+    #     # Selesaikan tes otomatis sesuai durasi di config
     #     duration = COUNT_STARTING_GASS
     #     Clock.schedule_once(self.finish_test, duration)
 
@@ -752,13 +816,12 @@ class ScreenGassEmission(MDScreen):
             self.measurement_event = None
         
         if self.ser and self.ser.is_open:
-            self.ser.write(CMD_STOP_MEASURE)
-            time.sleep(1)
             self.ser.close()
         
         toast("Pengukuran Selesai...")
-        self.ids.lb_test_subtitle.text = "Siap untuk uji ulang atau simpan."
+        self.ids.lb_test_subtitle.text = "Siap untuk disimpan."
         self.ids.bt_mulai.disabled = False
+        self.ids.bt_save.disabled = False 
         self.evaluate_results()
 
     def evaluate_results(self):
@@ -791,16 +854,14 @@ class ScreenGassEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi hasil - {e}")
 
     def exec_save(self):
-        global mydb, dt_no_antri, dt_id_user # Tambahkan dt_id_user
+        global mydb, dt_no_antri, dt_id_user
         try:
             self.evaluate_results()
             
-            # Ambil waktu sekarang
             now = datetime.datetime.now()
-            waktu_simpan = now.strftime("%H:%M:%S")
+            waktu_simpan = now.strftime("%Y-%m-%d %H:%M:%S") 
             
             cursor = mydb.cursor()
-            # Tambahkan kolom emission_user dan emission_post
             sql = f"""UPDATE {TB_DATA} SET 
                          emission_hc_value = %s, 
                          emission_hc_flag = %s, 
@@ -816,9 +877,9 @@ class ScreenGassEmission(MDScreen):
             cursor.execute(sql, val)
             mydb.commit()
             
-            toast(f"Data disimpan oleh ID: {dt_id_user}")
+            toast(f"Data Berhasil Disimpan")
             self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
-
+            self.screen_manager.current = 'screen_main'
         except Exception as e:
             toast("Gagal menyimpan data.")
             Logger.error(f"Save Gas Error: {e}")
