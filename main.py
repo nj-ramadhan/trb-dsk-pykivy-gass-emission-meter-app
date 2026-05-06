@@ -1,7 +1,6 @@
 import datetime
 import os, sys, time
 import ssl
-from attr import s
 import serial
 from serial.tools import list_ports
 import random
