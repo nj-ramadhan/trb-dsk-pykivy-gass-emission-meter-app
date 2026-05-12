@@ -1,9 +1,6 @@
 import datetime
 import os, sys, time
 import ssl
-import serial
-from serial.tools import list_ports
-import random
 ssl._create_default_https_context = ssl._create_unverified_context
 
 if getattr(sys, 'frozen', False):
@@ -38,10 +35,10 @@ from kivy.metrics import dp
 from kivymd.toast import toast
 from kivymd.app import MDApp
 import numpy as np
-import configparser, hashlib, mysql.connector
-from pymodbus.client import ModbusTcpClient
-from fpdf import FPDF
-from escpos.printer import Serial
+import configparser, mysql.connector
+import serial
+from serial.tools import list_ports
+import random
 
 dt_id_user = 0
 dt_user = ""

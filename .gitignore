@@ -1,12 +1,19 @@
 # Ignore the virtual environment folder
 venv/
 .venv/
-*cfg
+*.cfg
 
 # Ignore PyInstaller build and distribution folders
 build/
 dist/
+release/
+Output/
+Application Folder/
 *.spec
+
+# Ignore Log files
+logs/
+*.log
 
 # Ignore Python cache files
 __pycache__/
@@ -19,6 +26,3 @@ __pycache__/
 *.swo
 *.DS_Store
 
-release/
-Output/
-Application Folder/
