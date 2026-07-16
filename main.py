@@ -31,6 +31,8 @@ from kivymd.uix.screen import MDScreen
 from kivymd.uix.label import MDLabel
 from kivymd.uix.card import MDCard
 from kivymd.uix.textfield import MDTextField
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton
 from kivy.metrics import dp
 from kivymd.toast import toast
 from kivymd.app import MDApp
@@ -39,6 +41,7 @@ import configparser, mysql.connector
 import serial
 from serial.tools import list_ports
 import random
+import threading
 
 dt_id_user = 0
 dt_user = ""
@@ -89,6 +92,8 @@ FTP_PASS = "@SorongNew2026"
 ## System Setting
 COUNT_STARTING_GASS = int(config['setting']['COUNT_STARTING_GASS'])
 COUNT_STARTING_DIESEL = int(config['setting']['COUNT_STARTING_DIESEL'])
+DEVICE_MODE_GASS = config['setting'].get('DEVICE_MODE_GASS', 'ASLI').strip().upper()
+SIMULATION_GASS = DEVICE_MODE_GASS == 'SIMULASI'
 COM_PORT = config['setting']['SERIAL_COM_GASS']
 BAUD_RATE = int(config['setting']['SERIAL_BAUD_GASS'])
 TIMEOUT = float(config['setting']['SERIAL_TIMEOUT_GASS'])
@@ -110,6 +115,28 @@ PRINTER_THERM_DSRDTR = bool(config['setting']['PRINTER_THERM_DSRDTR'])
 STANDARD_MAX_HC = float(config['standard']['STANDARD_MAX_HC']) 
 STANDARD_MAX_CO = float(config['standard']['STANDARD_MAX_CO'])
 STANDARD_MAX_SMOKE = float(config['standard']['STANDARD_MAX_SMOKE'])
+
+def fetch_lookup_table(cursor, query):
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    return np.array(rows) if rows else np.empty((0, 2), dtype=object)
+
+# Query DB (mysql-connector) bersifat blocking, jadi dijalankan di background
+# thread agar tidak membekukan UI Kivy. db_lock memastikan hanya satu query
+# yang memakai koneksi global `mydb` dalam satu waktu (koneksi tidak thread-safe).
+db_lock = threading.Lock()
+
+def run_in_background(work, on_done=None, on_error=None):
+    def task():
+        try:
+            with db_lock:
+                result = work()
+        except Exception as e:
+            Clock.schedule_once(lambda dt: on_error(e) if on_error else Logger.error(f"Background task error: {e}"))
+            return
+        if on_done:
+            Clock.schedule_once(lambda dt: on_done(result))
+    threading.Thread(target=task, daemon=True).start()
 
 class ScreenHome(MDScreen):
     def __init__(self, **kwargs):
@@ -194,50 +221,59 @@ class ScreenLogin(MDScreen):
             toast_msg = f'error Login: {e}'
 
     def exec_login(self):
-        global mydb, dt_id_user, dt_user, dt_foto_user
-        screen_main = self.screen_manager.get_screen('screen_main')
+        TB_WEB_USER = "web_users"
+        input_email = self.ids.tx_username.text
+        input_password = self.ids.tx_password.text
 
-        TB_WEB_USER = "web_users" 
+        self.ids.bt_login.disabled = True
 
-        try:
-            screen_main.exec_reload_database()
-            input_email = self.ids.tx_username.text
-            input_password = self.ids.tx_password.text        
-            
+        def work():
+            global mydb
+            mydb = mysql.connector.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
             mycursor = mydb.cursor()
-            
+
             # Query sesuai instruksi: mencari email dengan tipe_user = '2'
             query = f"SELECT id_sumber, name, email, password FROM {TB_WEB_USER} WHERE email = %s AND tipe_user = '2'"
-
             mycursor.execute(query, (input_email,))
             myresult = mycursor.fetchone()
+            mycursor.close()
 
-            if myresult:
-                db_id = myresult[0]
-                db_name = myresult[1]
-                db_hashed_password = myresult[3]
+            if not myresult:
+                return None
 
-                # Verifikasi menggunakan Bcrypt
-                import bcrypt
-                if bcrypt.checkpw(input_password.encode('utf-8'), db_hashed_password.encode('utf-8')):
-                    toast(f"Berhasil Masuk, Selamat Datang {db_name}")
-                    
-                    # Simpan data ke variabel global
-                    dt_id_user = db_id
-                    dt_user = db_name
-                    dt_foto_user = "" # Kosong karena tidak ada kolom image
-                    
-                    self.ids.tx_username.text = ""
-                    self.ids.tx_password.text = "" 
-                    self.screen_manager.current = 'screen_main'
-                else:
-                    toast("maaf username dan password tidak sesuai")
+            db_id, db_name, db_email, db_hashed_password = myresult
+
+            # Verifikasi menggunakan Bcrypt
+            import bcrypt
+            if bcrypt.checkpw(input_password.encode('utf-8'), db_hashed_password.encode('utf-8')):
+                return (db_id, db_name)
+            return False
+
+        def on_done(result):
+            global dt_id_user, dt_user, dt_foto_user
+            self.ids.bt_login.disabled = False
+
+            if result:
+                db_id, db_name = result
+                toast(f"Berhasil Masuk, Selamat Datang {db_name}")
+
+                # Simpan data ke variabel global
+                dt_id_user = db_id
+                dt_user = db_name
+                dt_foto_user = "" # Kosong karena tidak ada kolom image
+
+                self.ids.tx_username.text = ""
+                self.ids.tx_password.text = ""
+                self.screen_manager.current = 'screen_main'
             else:
                 toast("maaf username dan password tidak sesuai")
 
-        except Exception as e:
+        def on_error(e):
+            self.ids.bt_login.disabled = False
             Logger.error(f"Login Error: {e}")
             toast(f"Gagal masuk: {e}")
+
+        run_in_background(work, on_done, on_error)
 
     def exec_navigate_home(self):
         try:
@@ -357,20 +393,16 @@ class ScreenMain(MDScreen):
             Logger.error(f"{self.name}: {toast_msg}, {e}") 
 
     def exec_reload_table(self):
-        print("\n--- FUNGSI exec_reload_table DIPANGGIL ---")
-        global mydb, db_antrian, db_merk, db_bahan_bakar, db_warna
-        global dt_dash_pendaftaran, dt_dash_belum_uji, dt_dash_sudah_uji
+        def work():
+            global mydb, db_antrian, db_merk, db_bahan_bakar, db_warna
+            global dt_dash_pendaftaran, dt_dash_belum_uji, dt_dash_sudah_uji
 
-        try:
             cursor = mydb.cursor()
             today = str(time.strftime("%Y-%m-%d", time.localtime()))
 
-            cursor.execute(f"SELECT ID, DESCRIPTION FROM {TB_MERK}")
-            db_merk = np.array(cursor.fetchall())
-            cursor.execute(f"SELECT ID, DESCRIPTION FROM {TB_BAHAN_BAKAR}")
-            db_bahan_bakar = np.array(cursor.fetchall())
-            cursor.execute(f"SELECT id_warna, nama FROM {TB_WARNA}")
-            db_warna = np.array(cursor.fetchall())
+            db_merk = fetch_lookup_table(cursor, f"SELECT ID, DESCRIPTION FROM {TB_MERK}")
+            db_bahan_bakar = fetch_lookup_table(cursor, f"SELECT ID, DESCRIPTION FROM {TB_BAHAN_BAKAR}")
+            db_warna = fetch_lookup_table(cursor, f"SELECT id_warna, nama FROM {TB_WARNA}")
 
             query_pendaftaran = f"SELECT COUNT(*) FROM {TB_DATA} WHERE DATE(tgl_daftar) = %s"
             cursor.execute(query_pendaftaran, (today,))
@@ -386,7 +418,7 @@ class ScreenMain(MDScreen):
             """
             cursor.execute(query_sudah_uji, (today,))
             dt_dash_sudah_uji = cursor.fetchone()[0] or 0
-            
+
             dt_dash_belum_uji = dt_dash_pendaftaran - dt_dash_sudah_uji
 
             belum_uji_logic = """
@@ -397,23 +429,32 @@ class ScreenMain(MDScreen):
                 )
             """
             query_table = f"""
-                SELECT noantrian, nopol, nouji, statusuji, merk, type, idjeniskendaraan, 
+                SELECT noantrian, nopol, nouji, statusuji, merk, type, idjeniskendaraan,
                     jbb, berat_kosong, bahan_bakar, warna, th_buat,
-                    emission_hc_flag, emission_co_flag, emission_smoke_flag 
-                FROM {TB_DATA} 
+                    emission_hc_flag, emission_co_flag, emission_smoke_flag
+                FROM {TB_DATA}
                 WHERE {belum_uji_logic} AND DATE(tgl_daftar) = %s
             """
             cursor.execute(query_table, (today,))
             result_tb_antrian = cursor.fetchall()
-            
+
             db_antrian = np.array(result_tb_antrian).T if result_tb_antrian else np.array([])
             cursor.close()
 
-        except Exception as e:
+            # Reconnect setelah reload, sama seperti perilaku sebelumnya
+            mydb = mysql.connector.connect(host=DB_HOST, user=DB_USER, password=DB_PASSWORD, database=DB_NAME)
+
+        def on_done(_result):
+            self._render_antrian_table()
+
+        def on_error(e):
             toast('Gagal mengambil data antrian harian')
             Logger.error(f"{self.name}: Reload Table Error, {e}")
-            return
-        
+
+        run_in_background(work, on_done, on_error)
+
+    def _render_antrian_table(self):
+        global db_antrian, db_merk, db_bahan_bakar, db_warna
         try:
             layout_list = self.ids.layout_list
             layout_list.clear_widgets()
@@ -471,8 +512,6 @@ class ScreenMain(MDScreen):
         except Exception as e:
             toast('Gagal memuat ulang tabel antrian')
             Logger.error(f"{self.name}: Gagal render tabel, {e}")
-        
-        self.exec_reload_database()
 
 # INI UNTUK HC CO DAN SMOKE
     # def on_antrian_row_press(self, instance):
@@ -624,11 +663,12 @@ class ScreenGassEmission(MDScreen):
         self.latest_co = 0.0 
         self.port_check_event = None
         self.toast_shown = False
+        self.save_dialog = None
         Clock.schedule_once(self.delayed_init, 1)
 
-    def delayed_init(self, dt):   
+    def delayed_init(self, dt):
         self.ids.lb_title.text = APP_TITLE
-        self.ids.lb_subtitle.text = APP_SUBTITLE              
+        self.ids.lb_subtitle.text = APP_SUBTITLE
         self.ids.img_pemkab.source = f'assets/images/{IMG_LOGO_PEMKAB}'
         self.ids.img_dishub.source = f'assets/images/{IMG_LOGO_DISHUB}'
         self.ids.lb_pemkab.text = LB_PEMKAB
@@ -649,9 +689,13 @@ class ScreenGassEmission(MDScreen):
         except Exception as e:
             Logger.error(f"{self.name}: Gagal mengisi label identitas - {e}")  
             
-        if not self.port_check_event:
-            self.port_check_event = Clock.schedule_interval(self.check_device_presence, 5)
-        self.check_device_presence(0)
+        if SIMULATION_GASS:
+            self.ids.lb_comm.text = "Com: Simulasi Aktif"
+            self.ids.lb_comm.text_color = self.theme_cls.colors["Green"]["200"]
+        else:
+            if not self.port_check_event:
+                self.port_check_event = Clock.schedule_interval(self.check_device_presence, 5)
+            self.check_device_presence(0)
 
         self.ids.lb_test_result.text = ""
         self.ids.lb_test_result.md_bg_color = (0,0,0,0)
@@ -665,9 +709,11 @@ class ScreenGassEmission(MDScreen):
         if self.port_check_event:
             self.port_check_event.cancel()
             self.port_check_event = None
-        
+
         if self.ser and self.ser.is_open:
             self.ser.close()
+
+        self.dismiss_save_dialog()
 
     def check_device_presence(self, dt):
         available_ports = [port.device for port in list_ports.comports()]
@@ -690,25 +736,33 @@ class ScreenGassEmission(MDScreen):
             self.ids.lb_comm.text_color = self.theme_cls.colors["Red"]["A200"]
     
     def exec_start_test(self):
+        if SIMULATION_GASS:
+            self.start_simulated_test()
+            return
+
         if "Tidak Terhubung" in self.ids.lb_comm.text:
             toast(f"Tidak bisa memulai, alat di {COM_PORT} tidak terhubung.")
             return
-        
+
         try:
             self.ser = serial.Serial(COM_PORT, BAUD_RATE, timeout=TIMEOUT)
+            self.ser.write(CMD_START_MEASURE)
             toast(f"Berhasil terhubung ke alat di {COM_PORT}")
         except serial.SerialException as e:
             toast(f"Gagal terhubung ke alat di {COM_PORT}")
             self.update_connection_status(False)
             Logger.error(f"Serial Connection Error: {e}")
+            if self.ser and self.ser.is_open:
+                self.ser.close()
+            self.ser = None
             return
-
-        self.ser.write(CMD_START_MEASURE)
-        time.sleep(1)
 
         self.ids.bt_mulai.disabled = True
         self.ids.lb_test_subtitle.text = "Pengukuran berlangsung..."
         self.ids.bt_save.disabled = False
+        Clock.schedule_once(self.begin_measurement, 1)
+
+    def begin_measurement(self, dt):
         self.measurement_event = Clock.schedule_interval(self.read_serial_data, 0.5)
         duration = COUNT_STARTING_GASS
         Clock.schedule_once(self.finish_test, duration)
@@ -741,43 +795,36 @@ class ScreenGassEmission(MDScreen):
                 Logger.error(f"Serial Read Error: {e}")
                 self.finish_test(0) 
 
-    # SIMULASI DUMMY    
-    # def exec_start_test(self):
-    #     toast("Memulai mode simulasi...")
-        
-    #     # Reset data lama agar tidak membingungkan
-    #     self.latest_hc = 0
-    #     self.latest_co = 0.0
-    #     self.ids.bt_save.disabled = True # Pastikan tombol simpan mati saat tes jalan
+    def start_simulated_test(self):
+        toast("Memulai mode simulasi...")
 
-    #     self.ids.bt_mulai.disabled = True
-    #     self.ids.lb_test_subtitle.text = "Simulasi pengukuran berlangsung..."
-    #     self.ids.lb_comm.text = "Status: SIMULASI AKTIF"
-    #     self.ids.lb_comm.text_color = self.theme_cls.colors["Green"]["200"]
-        
-    #     # Jalankan pembacaan data palsu
-    #     self.measurement_event = Clock.schedule_interval(self.read_serial_data, 0.5)
-        
-    #     # Selesaikan tes otomatis sesuai durasi di config
-    #     duration = COUNT_STARTING_GASS
-    #     Clock.schedule_once(self.finish_test, duration)
+        self.latest_hc = 0
+        self.latest_co = 0.0
 
-    # def read_serial_data(self, dt):
-    #     try:
-    #         fake_co_val = random.randint(10, 50) 
-    #         fake_hc_val = random.randint(50, 60)
-    #         fake_data_string = f"{fake_co_val:03d}  {fake_hc_val}  {random.randint(100,999)}A 00"
+        self.ids.bt_mulai.disabled = True
+        self.ids.lb_test_subtitle.text = "Simulasi pengukuran berlangsung..."
+        self.ids.bt_save.disabled = False
 
-    #         parsed_data = self.parse_data_string_baru(fake_data_string)
-    #         if parsed_data:
-    #             self.latest_hc = parsed_data.get('HC', self.latest_hc)
-    #             self.latest_co = parsed_data.get('CO', self.latest_co)
-                
-    #             self.ids.lb_emission_hc.text = str(self.latest_hc)
-    #             self.ids.lb_emission_co.text = f"{self.latest_co:.2f}"
+        self.measurement_event = Clock.schedule_interval(self.read_dummy_data, 0.5)
+        duration = COUNT_STARTING_GASS
+        Clock.schedule_once(self.finish_test, duration)
 
-    #     except Exception as e:
-    #         Logger.error(f"Error di simulasi read_serial_data: {e}")
+    def read_dummy_data(self, dt):
+        try:
+            fake_co_val = random.randint(10, 50)
+            fake_hc_val = random.randint(50, 60)
+            fake_data_string = f"{fake_co_val:03d}  {fake_hc_val}  {random.randint(100,999)}A 00"
+
+            parsed_data = self.parse_data_string_baru(fake_data_string)
+            if parsed_data:
+                self.latest_hc = parsed_data.get('HC', self.latest_hc)
+                self.latest_co = parsed_data.get('CO', self.latest_co)
+
+                self.ids.lb_emission_hc.text = str(self.latest_hc)
+                self.ids.lb_emission_co.text = f"{self.latest_co:.2f}"
+
+        except Exception as e:
+            Logger.error(f"Error di simulasi read_dummy_data: {e}")
 
     def parse_data_string_baru(self, data_string: str):
             try:
@@ -850,35 +897,90 @@ class ScreenGassEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi hasil - {e}")
 
     def exec_save(self):
-        global mydb, dt_no_antri, dt_id_user
-        try:
-            self.evaluate_results()
-            
-            now = datetime.datetime.now()
-            waktu_simpan = now.strftime("%Y-%m-%d %H:%M:%S") 
-            
+        if SIMULATION_GASS:
+            self.confirm_simulated_save()
+        else:
+            self.do_save()
+
+    def confirm_simulated_save(self):
+        global dt_no_antri
+        if self.save_dialog:
+            return
+
+        self.save_dialog = MDDialog(
+            title="Mode Simulasi Aktif",
+            text=(
+                f"Nilai HC/CO ini adalah data SIMULASI (dummy), bukan hasil alat sungguhan.\n"
+                f"Data akan tetap ditulis ke database untuk antrian {dt_no_antri}.\n\n"
+                f"Tetap simpan?"
+            ),
+            buttons=[
+                MDFlatButton(text="BATAL", on_release=lambda x: self.dismiss_save_dialog()),
+                MDFlatButton(text="TETAP SIMPAN", on_release=lambda x: self.confirm_and_save()),
+            ],
+        )
+        self.save_dialog.open()
+
+    def dismiss_save_dialog(self):
+        if self.save_dialog:
+            self.save_dialog.dismiss()
+            self.save_dialog = None
+
+    def confirm_and_save(self):
+        self.dismiss_save_dialog()
+        self.do_save()
+
+    def do_save(self):
+        global dt_no_antri, dt_id_user
+        self.evaluate_results()
+
+        now = datetime.datetime.now()
+        waktu_simpan = now.strftime("%Y-%m-%d %H:%M:%S")
+        hc_val, hc_flag = self.latest_hc, emission_hc_flag
+        co_val, co_flag = self.latest_co, emission_co_flag
+        no_antri, id_user = dt_no_antri, dt_id_user
+
+        self.ids.bt_save.disabled = True
+
+        def work():
+            global mydb
             cursor = mydb.cursor()
-            sql = f"""UPDATE {TB_DATA} SET 
-                         emission_hc_value = %s, 
-                         emission_hc_flag = %s, 
-                         emission_co_value = %s, 
+            sql = f"""UPDATE {TB_DATA} SET
+                         emission_hc_value = %s,
+                         emission_hc_flag = %s,
+                         emission_co_value = %s,
                          emission_co_flag = %s,
                          emission_user = %s,
                          emission_post = %s
                       WHERE noantrian = %s"""
-            
-            val = (self.latest_hc, emission_hc_flag, self.latest_co, emission_co_flag, 
-                   dt_id_user, waktu_simpan, dt_no_antri)
-            
+            val = (hc_val, hc_flag, co_val, co_flag, id_user, waktu_simpan, no_antri)
             cursor.execute(sql, val)
+
+            if cursor.rowcount == 0:
+                mydb.rollback()
+                cursor.close()
+                return False
+
             mydb.commit()
-            
-            toast(f"Data Berhasil Disimpan")
-            self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
-            self.screen_manager.current = 'screen_main'
-        except Exception as e:
+            cursor.close()
+            return True
+
+        def on_done(success):
+            self.ids.bt_save.disabled = False
+            if success:
+                toast(f"Data Berhasil Disimpan")
+                self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
+                self.screen_manager.current = 'screen_main'
+            else:
+                toast(f"Gagal menyimpan: antrian {no_antri} tidak ditemukan.")
+                Logger.error(f"{self.name}: Save Gas gagal, noantrian={no_antri} tidak match (rowcount=0)")
+
+        def on_error(e):
+            self.ids.bt_save.disabled = False
             toast("Gagal menyimpan data.")
             Logger.error(f"Save Gas Error: {e}")
+
+        run_in_background(work, on_done, on_error)
 
     def exec_print(self):
         toast("Fungsi Print Belum Diimplementasikan")
@@ -1013,33 +1115,53 @@ class ScreenDieselEmission(MDScreen):
             Logger.error(f"{self.name}: Gagal evaluasi diesel - {e}")
 
     def exec_save(self):
-        global mydb, dt_no_antri, dt_id_user # Tambahkan dt_id_user
-        try:
-            self.evaluate_results()
-            
-            now = datetime.datetime.now()
-            waktu_simpan = now.strftime("%H:%M:%S")
-            
+        global dt_no_antri, dt_id_user
+        self.evaluate_results()
+
+        now = datetime.datetime.now()
+        waktu_simpan = now.strftime("%H:%M:%S")
+        smoke_val, smoke_flag = self.latest_smoke, emission_smoke_flag
+        no_antri, id_user = dt_no_antri, dt_id_user
+
+        self.ids.bt_save.disabled = True
+
+        def work():
+            global mydb
             cursor = mydb.cursor()
             # Update query untuk menyertakan user dan post
-            sql = f"""UPDATE {TB_DATA} SET 
-                        emission_smoke_value = %s, 
+            sql = f"""UPDATE {TB_DATA} SET
+                        emission_smoke_value = %s,
                         emission_smoke_flag = %s,
                         emission_user = %s,
                         emission_post = %s
                       WHERE noantrian = %s"""
-            
-            val = (self.latest_smoke, emission_smoke_flag, dt_id_user, waktu_simpan, dt_no_antri)
-            
+            val = (smoke_val, smoke_flag, id_user, waktu_simpan, no_antri)
             cursor.execute(sql, val)
+
+            if cursor.rowcount == 0:
+                mydb.rollback()
+                cursor.close()
+                return False
+
             mydb.commit()
-            
-            toast(f"Data disimpan oleh ID: {dt_id_user}")
-            self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
-            
-        except Exception as e:
+            cursor.close()
+            return True
+
+        def on_done(success):
+            self.ids.bt_save.disabled = False
+            if success:
+                toast(f"Data disimpan oleh ID: {id_user}")
+                self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
+            else:
+                toast(f"Gagal menyimpan: antrian {no_antri} tidak ditemukan.")
+                Logger.error(f"{self.name}: Save Diesel gagal, noantrian={no_antri} tidak match (rowcount=0)")
+
+        def on_error(e):
+            self.ids.bt_save.disabled = False
             toast("Gagal menyimpan data.")
             Logger.error(f"Save Diesel Error: {e}")
+
+        run_in_background(work, on_done, on_error)
 
     def exec_navigate_main(self):
         if hasattr(self, 'measurement_event') and self.measurement_event:
