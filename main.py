@@ -71,10 +71,10 @@ LB_UNIT_ADDRESS = config['app']['LB_UNIT_ADDRESS']
 
 # SQL setting
 DB_HOST = "187.77.112.162"
-DB_USER = "Pndujikir2026!"
-DB_PASSWORD = "@PndKir2026!"
-
+DB_USER = "IntegrasiPnd@"
+DB_PASSWORD = "@PndIntegrated26"
 DB_NAME = "pkbpandeglang"
+
 TB_DATA = "tb_cekident"
 TB_USER = "users"
 TB_MERK = "merk"
@@ -207,15 +207,15 @@ class ScreenLogin(MDScreen):
             mycursor = mydb.cursor()
             
             # Query sesuai instruksi: mencari email dengan tipe_user = '2'
-            query = f"SELECT id, name, email, password FROM {TB_WEB_USER} WHERE email = %s AND tipe_user = '2'"
-            
+            query = f"SELECT id_sumber, name, email, password FROM {TB_WEB_USER} WHERE email = %s AND tipe_user = '2'"
+
             mycursor.execute(query, (input_email,))
             myresult = mycursor.fetchone()
-            
+
             if myresult:
                 db_id = myresult[0]
                 db_name = myresult[1]
-                db_hashed_password = myresult[3] 
+                db_hashed_password = myresult[3]
 
                 # Verifikasi menggunakan Bcrypt
                 import bcrypt
