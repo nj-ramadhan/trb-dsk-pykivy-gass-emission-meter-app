@@ -1,8 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
+import os
 from kivy_deps import sdl2, glew
 from kivymd import hooks_path as kivymd_hooks_path
+
+# mysql-connector-python's C extension (_mysql_connector) loads auth-plugin
+# DLLs (mis. mysql_native_password.dll) at runtime via LoadLibrary, dicari
+# relatif terhadap lokasi _mysql_connector itu sendiri di folder
+# 'mysql/vendor/plugin'. PyInstaller tidak mendeteksi ini secara otomatis
+# karena bukan import Python biasa, jadi harus disertakan manual sebagai data.
+import mysql
+mysql_vendor_path = os.path.join(os.path.dirname(mysql.__file__), 'vendor')
 
 a = Analysis(['main.py'],
              pathex=[SPECPATH],
@@ -12,7 +21,8 @@ a = Analysis(['main.py'],
                      ('config.ini', '.'),
                      ('./assets/images/*.png', 'assets/images'), ('./assets/images/*.jpg', 'assets/images'),
                      ('./assets/images/*.ico', 'assets/images'),
-                     ('./assets/fonts/*.ttf', 'assets/fonts'), ('./assets/fonts/*.otf', 'assets/fonts'),],
+                     ('./assets/fonts/*.ttf', 'assets/fonts'), ('./assets/fonts/*.otf', 'assets/fonts'),
+                     (mysql_vendor_path, 'mysql/vendor'),],
              hiddenimports=[],
              hookspath=[kivymd_hooks_path],
              runtime_hooks=[],

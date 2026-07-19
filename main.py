@@ -15,7 +15,10 @@ else:
         application_path = os.getcwd()
         running_mode = 'Interactive'
 logger_name = f'app.log'
-logger_dir = os.path.join(application_path, "logs")
+# Ditulis ke %LOCALAPPDATA% (bukan folder instalasi) karena instalasi default
+# ada di Program Files yang tidak bisa ditulis oleh user non-admin.
+user_data_dir = os.environ.get('LOCALAPPDATA') or application_path
+logger_dir = os.path.join(user_data_dir, "TRB-VIIMS-GassEmissionMeter", "logs")
 
 from kivy.config import Config
 Config.set('kivy', 'keyboard_mode', 'system')
@@ -38,6 +41,7 @@ from kivymd.toast import toast
 from kivymd.app import MDApp
 import numpy as np
 import configparser, mysql.connector
+from fpdf import FPDF
 import serial
 from serial.tools import list_ports
 import random
@@ -132,7 +136,10 @@ def run_in_background(work, on_done=None, on_error=None):
             with db_lock:
                 result = work()
         except Exception as e:
-            Clock.schedule_once(lambda dt: on_error(e) if on_error else Logger.error(f"Background task error: {e}"))
+            # 'e' harus di-bind sebagai default arg: Python menghapus variabel
+            # except di akhir blok except, tapi lambda ini baru dieksekusi
+            # belakangan oleh Clock, setelah blok except selesai.
+            Clock.schedule_once(lambda dt, e=e: on_error(e) if on_error else Logger.error(f"Background task error: {e}"))
             return
         if on_done:
             Clock.schedule_once(lambda dt: on_done(result))
@@ -251,22 +258,26 @@ class ScreenLogin(MDScreen):
 
         def on_done(result):
             global dt_id_user, dt_user, dt_foto_user
-            self.ids.bt_login.disabled = False
+            try:
+                self.ids.bt_login.disabled = False
 
-            if result:
-                db_id, db_name = result
-                toast(f"Berhasil Masuk, Selamat Datang {db_name}")
+                if result:
+                    db_id, db_name = result
+                    toast(f"Berhasil Masuk, Selamat Datang {db_name}")
 
-                # Simpan data ke variabel global
-                dt_id_user = db_id
-                dt_user = db_name
-                dt_foto_user = "" # Kosong karena tidak ada kolom image
+                    # Simpan data ke variabel global
+                    dt_id_user = db_id
+                    dt_user = db_name
+                    dt_foto_user = "" # Kosong karena tidak ada kolom image
 
-                self.ids.tx_username.text = ""
-                self.ids.tx_password.text = ""
-                self.screen_manager.current = 'screen_main'
-            else:
-                toast("maaf username dan password tidak sesuai")
+                    self.ids.tx_username.text = ""
+                    self.ids.tx_password.text = ""
+                    self.screen_manager.current = 'screen_main'
+                else:
+                    toast("maaf username dan password tidak sesuai")
+            except Exception as e:
+                toast("Terjadi kesalahan setelah login")
+                Logger.error(f"Login on_done Error: {e}")
 
         def on_error(e):
             self.ids.bt_login.disabled = False
@@ -970,6 +981,7 @@ class ScreenGassEmission(MDScreen):
             if success:
                 toast(f"Data Berhasil Disimpan")
                 self.ids.lb_test_subtitle.text = f"Tersimpan pada {waktu_simpan}"
+                self.exec_print()
                 self.screen_manager.current = 'screen_main'
             else:
                 toast(f"Gagal menyimpan: antrian {no_antri} tidak ditemukan.")
@@ -983,7 +995,120 @@ class ScreenGassEmission(MDScreen):
         run_in_background(work, on_done, on_error)
 
     def exec_print(self):
-        toast("Fungsi Print Belum Diimplementasikan")
+        """Cetak hasil uji emisi gas buang (HC/CO) ke PDF."""
+        global dt_no_antri, dt_no_pol, dt_no_uji, dt_sts_uji, dt_merk, dt_type
+        global dt_jns_kend, dt_jbb, dt_brt_ksg, dt_bhn_bkr, dt_warna, dt_thn_buat
+        global dt_user, db_merk, db_warna, db_bahan_bakar
+        global emission_hc_flag, emission_co_flag
+
+        try:
+            print_datetime = str(time.strftime("%Y/%m/%d %H:%M:%S", time.localtime()))
+
+            try:
+                merk_row = db_merk[db_merk[:, 0] == dt_merk]
+                merk_text = merk_row[0, 1] if merk_row.size > 0 else str(dt_merk)
+            except Exception:
+                merk_text = str(dt_merk)
+
+            try:
+                warna_row = db_warna[db_warna[:, 0] == dt_warna]
+                warna_text = warna_row[0, 1] if warna_row.size > 0 else str(dt_warna)
+            except Exception:
+                warna_text = str(dt_warna)
+
+            try:
+                bbm_row = db_bahan_bakar[db_bahan_bakar[:, 0] == dt_bhn_bkr]
+                bahan_bakar_text = bbm_row[0, 1] if bbm_row.size > 0 else str(dt_bhn_bkr)
+            except Exception:
+                bahan_bakar_text = str(dt_bhn_bkr)
+
+            sts_uji_map = {'B': 'Berkala', 'U': 'Uji Ulang', 'BR': 'Baru', 'NB': 'Numpang Uji'}
+            sts_uji_text = sts_uji_map.get(dt_sts_uji, 'Mutasi')
+            hasil_text = self.ids.lb_test_result.text or "-"
+
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_xy(0, 2)
+            pdf.image(f"assets/images/{IMG_LOGO_DISHUB}", w=30.0, h=0, x=20)
+            pdf.set_xy(0, 2)
+            pdf.image(f"assets/images/{IMG_LOGO_PEMKAB}", w=30.0, h=0, x=180)
+            pdf.set_font('Arial', 'B', 18.0)
+            pdf.cell(ln=1, h=5.0, w=0)
+            pdf.cell(ln=1, h=10.0, align='C', w=0, txt=LB_DISHUB, border=0)
+            pdf.set_font('Arial', 'B', 13.0)
+            pdf.cell(ln=1, h=8.0, align='C', w=0, txt=LB_UNIT, border=0)
+            pdf.cell(ln=1, h=5.0, w=0)
+
+            # Blok Info Kendaraan
+            pdf.set_font('Arial', 'B', 14.0)
+            pdf.cell(ln=0, h=10.0, align='L', w=0, txt=f"Tanggal: {print_datetime}", border=0)
+            pdf.cell(ln=1, h=10.0, align='R', w=0, txt=f"No Reg Kend: {dt_no_pol}", border=0)
+            pdf.cell(ln=0, h=10.0, align='L', w=0, txt=f"No Antrian: {dt_no_antri}", border=0)
+            pdf.cell(ln=1, h=10.0, align='R', w=0, txt=f"No Uji: {dt_no_uji}", border=0)
+            pdf.cell(ln=1, h=10.0, align='L', w=0, txt=f"Jenis Pengujian: {sts_uji_text}", border=0)
+            pdf.cell(ln=1, h=10.0, align='L', w=0, txt=f"Jenis Kendaraan: {dt_jns_kend}", border=0)
+            pdf.cell(ln=0, h=10.0, align='L', w=0, txt=f"Merk/Type: {merk_text} / {dt_type}", border=0)
+            pdf.cell(ln=1, h=10.0, align='R', w=0, txt=f"Warna: {warna_text}", border=0)
+            pdf.cell(ln=0, h=10.0, align='L', w=0, txt=f"JBB: {dt_jbb}", border=0)
+            pdf.cell(ln=1, h=10.0, align='R', w=0, txt=f"Berat Kosong: {dt_brt_ksg}", border=0)
+            pdf.cell(ln=1, h=10.0, align='L', w=0, txt=f"Bahan Bakar: {bahan_bakar_text}  |  Thn Buat: {dt_thn_buat}", border=0)
+            pdf.cell(ln=1, h=5.0, w=0)
+
+            # Section Tabel: HASIL UJI EMISI GAS BUANG (HC/CO)
+            pdf.set_font('Arial', 'B', 14.0)
+            pdf.cell(ln=1, h=8.0, align='L', w=0, txt="HASIL UJI EMISI GAS BUANG (HC/CO)", border=0)
+
+            col_param, col_hasil, col_ambang, col_status = 45, 45, 45, 45
+            pdf.set_font('Arial', 'B', 11.0)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_param, txt="Parameter", border=1)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_hasil, txt="Hasil Uji", border=1)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_ambang, txt="Ambang Batas", border=1)
+            pdf.cell(ln=1, h=7.0, align='C', w=col_status, txt="Status", border=1)
+
+            pdf.set_font('Arial', '', 11.0)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_param, txt="HC (ppm)", border=1)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_hasil, txt=f"{self.latest_hc}", border=1)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_ambang, txt=f"Maks {STANDARD_MAX_HC}", border=1)
+            pdf.cell(ln=1, h=7.0, align='C', w=col_status, txt=("Lulus" if emission_hc_flag == 1 else "Tidak Lulus"), border=1)
+
+            pdf.cell(ln=0, h=7.0, align='C', w=col_param, txt="CO (%)", border=1)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_hasil, txt=f"{self.latest_co}", border=1)
+            pdf.cell(ln=0, h=7.0, align='C', w=col_ambang, txt=f"Maks {STANDARD_MAX_CO}", border=1)
+            pdf.cell(ln=1, h=7.0, align='C', w=col_status, txt=("Lulus" if emission_co_flag == 1 else "Tidak Lulus"), border=1)
+            pdf.cell(ln=1, h=3.0, w=0)
+
+            pdf.set_font('Arial', '', 12.0)
+            pdf.cell(ln=1, h=8.0, align='L', w=0, txt=f"Petugas : {dt_user}", border=0)
+            pdf.set_font('Arial', 'B', 12.0)
+            pdf.cell(ln=1, h=8.0, align='L', w=0, txt=f"Status Pengujian : {hasil_text}", border=0)
+            pdf.cell(ln=1, h=6.0, w=0)
+
+            # Resume Akhir
+            pdf.set_font('Arial', '', 14.0)
+            pdf.cell(ln=1, h=10.0, align='C', w=0, txt="Resume Hasil Pengujian", border=0)
+            pdf.set_font('Arial', 'B', 24.0)
+            pdf.cell(ln=1, h=15.0, align='C', w=0, txt=hasil_text, border=0)
+
+            documents_dir = os.path.join(os.environ["USERPROFILE"], "Documents")
+
+            folder_name = f"Hasil_Uji_VIIMS_Gas_Emission_{time.strftime('%Y-%m-%d', time.localtime())}"
+            date_folder_path = os.path.join(documents_dir, folder_name)
+
+            if not os.path.exists(date_folder_path):
+                os.makedirs(date_folder_path)
+
+            pdf_filename = f"Hasil_Uji_No_{dt_no_antri}.pdf"
+            pdf_path = os.path.join(date_folder_path, pdf_filename)
+
+            pdf.output(pdf_path)
+            toast(f"PDF tersimpan: {pdf_path}")
+            os.startfile(pdf_path)
+            Logger.info(f"{self.name}: PRINT_PDF_GAS antrian={dt_no_antri} nopol={dt_no_pol} path={pdf_path}")
+
+        except Exception as e:
+            toast_msg = 'Gagal mencetak PDF'
+            toast(toast_msg)
+            Logger.error(f"{self.name}: {toast_msg}, {e}")
 
     def exec_navigate_main(self):
         if hasattr(self, 'measurement_event') and self.measurement_event:
@@ -1298,16 +1423,26 @@ if __name__ == '__main__':
         EmissionmeterApp().run()
     except Exception:
         import traceback
-        os.makedirs(logger_dir, exist_ok=True)
-        crash_log_path = os.path.join(logger_dir, 'crash.log')
         error_text = traceback.format_exc()
-        with open(crash_log_path, 'a', encoding='utf-8') as f:
-            f.write(f"\n[{datetime.datetime.now()}]\n{error_text}\n")
+        crash_log_path = os.path.join(logger_dir, 'crash.log')
+
+        # Menulis log tidak boleh menggagalkan penampilan dialog error itu
+        # sendiri (mis. kalau folder tujuan ternyata tidak bisa ditulis).
+        try:
+            os.makedirs(logger_dir, exist_ok=True)
+            with open(crash_log_path, 'a', encoding='utf-8') as f:
+                f.write(f"\n[{datetime.datetime.now()}]\n{error_text}\n")
+        except Exception:
+            crash_log_path = "(gagal menyimpan log ke disk)"
+
         if sys.platform == 'win32':
             import ctypes
+            MB_ICONERROR = 0x10
+            MB_SYSTEMMODAL = 0x1000
+            MB_TOPMOST = 0x40000
             ctypes.windll.user32.MessageBoxW(
                 0,
                 f"Aplikasi gagal dijalankan.\n\nDetail error disimpan di:\n{crash_log_path}\n\n{error_text[-500:]}",
                 "TRB-VIIMS Gass Emission Meter - Error",
-                0x10)
+                MB_ICONERROR | MB_SYSTEMMODAL | MB_TOPMOST)
         raise
