@@ -1182,7 +1182,7 @@ class EmissionmeterApp(MDApp):
         self.theme_cls.primary_palette = "Gray"
         self.theme_cls.accent_palette = "Blue"
         self.theme_cls.theme_style = "Light"
-        self.icon = 'assets/images/logo-load-app.png'
+        self.icon = 'assets/images/logo-emission-app.png'
         window_size_y = Window.size[0]
         window_size_x = Window.size[1]
         self.set_dynamic_fonts(Window.size)
@@ -1294,4 +1294,20 @@ class EmissionmeterApp(MDApp):
             self.refresh_fonts(self.root)
 
 if __name__ == '__main__':
-    EmissionmeterApp().run()
+    try:
+        EmissionmeterApp().run()
+    except Exception:
+        import traceback
+        os.makedirs(logger_dir, exist_ok=True)
+        crash_log_path = os.path.join(logger_dir, 'crash.log')
+        error_text = traceback.format_exc()
+        with open(crash_log_path, 'a', encoding='utf-8') as f:
+            f.write(f"\n[{datetime.datetime.now()}]\n{error_text}\n")
+        if sys.platform == 'win32':
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(
+                0,
+                f"Aplikasi gagal dijalankan.\n\nDetail error disimpan di:\n{crash_log_path}\n\n{error_text[-500:]}",
+                "TRB-VIIMS Gass Emission Meter - Error",
+                0x10)
+        raise
